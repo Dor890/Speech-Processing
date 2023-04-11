@@ -1,2 +1,2 @@
 # Speech-Processing
-Written by: Dor Messica (dor.messica), Roi Zehavi (roizh22)
+Written by: Dor Messica, Roi Zehavi.
