@@ -6,7 +6,7 @@ from enum import Enum
 import typing as tp
 from dataclasses import dataclass
 import json
-
+import matplotlib.pyplot as plt
 
 class Genre(Enum):
     """
@@ -114,8 +114,10 @@ class MusicClassifier:
                     hop_length=self.opt_params.hop_len,
                     n_mels=self.opt_params.n_mels)(wav)
             spec = torchaudio.transforms.AmplitudeToDB(top_db=80.0)(spec)
+            # plt.imshow(spec)
+            # plt.show()
             spec = spec.flatten(start_dim=0)
-            spec = torch.nn.functional.normalize(spec, p=2, dim=0)
+            spec = torch.nn.functional.normalize(spec, dim=0)
             feats = torch.cat((feats, spec))
         return feats.reshape(len(wavs), -1)
 
@@ -141,9 +143,8 @@ class MusicClassifier:
         """
         # Calculate loss
         labels = labels.reshape((len(labels), 1))
-        # loss = -(labels * torch.log(output_scores) +
-        #          (1-labels) * torch.log(1-output_scores)).mean()
-        loss = -(torch.sum(labels * output_scores) + torch.log(1+torch.exp(output_scores))).mean()
+        loss = -(labels * torch.log(output_scores) +
+                 (1-labels) * torch.log(1-output_scores)).mean()
 
         # Calculate gradients
         dL_dy = (output_scores-labels) / len(labels)
