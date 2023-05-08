@@ -28,7 +28,7 @@ class TrainingParameters:
     default values (so run won't break when we test this).
     """
     batch_size: int = 32
-    num_epochs: int = 100
+    num_epochs: int = 20  # Should be 100
     train_json_path: str = "jsons/train.json"
     test_json_path: str = "jsons/test.json"
 
@@ -75,7 +75,7 @@ class OptimizationParameters:
     This dataclass defines optimization related hyper-parameters to be passed to the model.
     feel free to add/change it as you see fit.
     """
-    learning_rate: float = 0.01
+    learning_rate: float = 0.02
     num_classes: int = 3
     input_dim: int = 66560
     sr: int = 16000
@@ -96,7 +96,7 @@ class MusicClassifier:
         - You could use kwargs (dictionary) for any other variables you wish to pass in here.
         - You should use `opt_params` for your optimization and you are welcome to experiment.
         """
-        self.weights = torch.zeros((opt_params.num_classes, opt_params.input_dim))
+        self.weights = torch.randn((opt_params.num_classes, opt_params.input_dim))
         self.biases = torch.zeros((opt_params.num_classes, ))
         self.opt_params = opt_params
         self.kwargs = kwargs
@@ -106,25 +106,27 @@ class MusicClassifier:
         this function extract features from a given audio.
         we will not be observing this method.
         """
-        feats = torchaudio.transforms.MelSpectrogram(
-            sample_rate=self.opt_params.sr,
-            n_fft=self.opt_params.n_fft,
-            hop_length=self.opt_params.hop_len,
-            n_mels=self.opt_params.n_mels)(wavs)
-
-        feats = torchaudio.transforms.AmplitudeToDB(top_db=80.0)(feats)
-
-        # Reshape to (batch_size, n_feats)
-        feats = torch.flatten(feats, start_dim=1)
-        feats = torch.nn.functional.normalize(feats, dim=1)
-        return feats
+        feats = torch.tensor([])
+        for wav in wavs:
+            spec = torchaudio.transforms.MelSpectrogram(
+                    sample_rate=self.opt_params.sr,
+                    n_fft=self.opt_params.n_fft,
+                    hop_length=self.opt_params.hop_len,
+                    n_mels=self.opt_params.n_mels)(wav)
+            spec = torchaudio.transforms.AmplitudeToDB(top_db=80.0)(spec)
+            spec = spec.flatten(start_dim=0)
+            spec = torch.nn.functional.normalize(spec, p=2, dim=0)
+            feats = torch.cat((feats, spec))
+        return feats.reshape(len(wavs), -1)
 
     def forward(self, feats: torch.Tensor) -> tp.Any:
         """
-        this function performs a forward pass throuh the model, outputting scores for every class.
-        feats: batch of extracted faetures
+        this function performs a forward pass through the model,
+        outputting scores for every class.
+        feats: batch of extracted features.
         """
-        return torch.matmul(feats, self.weights.t()) + self.biases
+        x = torch.matmul(feats, self.weights.t()) + self.biases
+        return torch.sigmoid(x)
 
     def backward(self, feats: torch.Tensor, output_scores: torch.Tensor, labels: torch.Tensor):
         """
@@ -138,28 +140,19 @@ class MusicClassifier:
         OptimizationParameters are passed to the initialization function
         """
         # Calculate loss
-        batch_size = output_scores.size(0)
-        loss = 0.0
-        for i in range(batch_size):
-            label_idx = labels[i].item()
-            loss += -output_scores[i][label_idx] + math.log(torch.exp(output_scores[i]).sum())
-        loss /= batch_size
+        labels = labels.reshape((len(labels), 1))
+        # loss = -(labels * torch.log(output_scores) +
+        #          (1-labels) * torch.log(1-output_scores)).mean()
+        loss = -(torch.sum(labels * output_scores) + torch.log(1+torch.exp(output_scores))).mean()
 
         # Calculate gradients
-        dW = torch.zeros_like(self.weights)
-        db = torch.zeros_like(self.biases)
-        for i in range(batch_size):
-            label_idx = labels[i].item()
-            exp_scores = torch.exp(output_scores[i])
-            probs = exp_scores / exp_scores.sum()
-            dW[label_idx] -= feats[i]
-            dW += torch.outer(probs, feats[i])
-            db[label_idx] -= 1
-            db += probs
+        dL_dy = (output_scores-labels) / len(labels)
+        dL_dw = torch.matmul(feats.T, dL_dy)
+        dL_db = torch.sum(dL_dy, dim=0)
 
         # Update gradients using SGD
-        self.weights = self.weights - self.opt_params.learning_rate * dW / batch_size
-        self.biases = self.biases - self.opt_params.learning_rate * db / batch_size
+        self.weights = self.weights - self.opt_params.learning_rate * dL_dw
+        self.biases = self.biases - self.opt_params.learning_rate * dL_db
 
         return loss
 
@@ -168,7 +161,7 @@ class MusicClassifier:
         This function returns the weights and biases associated with this model object, 
         should return a tuple: (weights, biases)
         """
-        return (self.weights, self.biases)
+        return self.weights, self.biases
     
     def classify(self, wavs: torch.Tensor) -> torch.Tensor:
         """
@@ -178,7 +171,7 @@ class MusicClassifier:
         feats = self.extract_feats(wavs)
         logits = self.forward(feats)
         preds = torch.argmax(logits, dim=1)
-        return preds.unsqueeze(1)
+        return preds
 
     def set_weights(self, saved_weights):
         """
@@ -200,12 +193,12 @@ class ClassifierHandler:
 
         for epoch in range(training_parameters.num_epochs):
             epoch_loss = 0.0
-            for i in range(len(training_parameters.train_data[0])):
-                batch_wavs, batch_labels = training_parameters.train_data[0][i],\
-                                           training_parameters.train_data[1][i]
+            x_train, y_train = training_parameters.train_data
+            for i in range(len(x_train)):  # Batch
+                batch_wavs, batch_labels = x_train[i], y_train[i]
                 feats = model.extract_feats(batch_wavs)
-                logits = model.forward(feats)
-                loss = model.backward(feats, logits, batch_labels)
+                output_scores = model.forward(feats)
+                loss = model.backward(feats, output_scores, batch_labels)
                 epoch_loss += loss
 
             print(f"Epoch {epoch}: Loss = {epoch_loss / len(training_parameters.train_data)}")
