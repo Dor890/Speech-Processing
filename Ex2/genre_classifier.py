@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import json
 import matplotlib.pyplot as plt
 
+
 class Genre(Enum):
     """
     This enum class is optional and defined for your convenience, you are not required to use it.
@@ -38,7 +39,7 @@ class TrainingParameters:
         indices = torch.randperm(x_train.size()[0])
         x_train, y_train = x_train[indices], y_train[indices]
         x_train, y_train = torch.split(x_train, self.batch_size), \
-                           torch.split(y_train, self.batch_size)  # 34 Batches
+                           torch.split(y_train, self.batch_size)  # 32 Batches
         self.train_data = (x_train, y_train)
 
         x_test, y_test = self.load_json(self.test_json_path)
@@ -55,18 +56,22 @@ class TrainingParameters:
             mp3_path = item['path']
             waveform, sr = torchaudio.load(mp3_path, format='mp3')
             mp3_arr.append(waveform.squeeze())
-            label = item['label']
-            if label == 'classical':
-                labels_arr.append(Genre.CLASSICAL.value)
-            elif label == 'heavy-rock':
-                labels_arr.append(Genre.HEAVY_ROCK.value)
-            elif label == 'reggae':
-                labels_arr.append(Genre.REGGAE.value)
-            else:
-                raise RuntimeError("Unrecognized Label")
+            TrainingParameters.parse_label(item, labels_arr)
         mp3_tensor = torch.stack(mp3_arr)
         labels_tensor = torch.tensor(labels_arr)
         return mp3_tensor, labels_tensor
+
+    @staticmethod
+    def parse_label(item, labels_arr):
+        label = item['label']
+        if label == 'classical':
+            labels_arr.append(Genre.CLASSICAL.value)
+        elif label == 'heavy-rock':
+            labels_arr.append(Genre.HEAVY_ROCK.value)
+        elif label == 'reggae':
+            labels_arr.append(Genre.REGGAE.value)
+        else:
+            raise RuntimeError("Unrecognized Label")
 
 
 @dataclass
@@ -77,11 +82,18 @@ class OptimizationParameters:
     """
     learning_rate: float = 0.02  # Should be lower
     num_classes: int = 3
-    input_dim: int = 66560
+    input_dim: int = 339040
     sr: int = 16000
     n_fft: int = 1024
     hop_len: int = 512
     n_mels: int = 128
+
+
+def convert_labels_tensor(labels):
+    labels = labels.reshape((len(labels), 1))
+    new_labels = torch.zeros((len(labels), 3))
+    new_labels.scatter_(1, labels, 1)
+    return new_labels
 
 
 class MusicClassifier:
@@ -96,8 +108,9 @@ class MusicClassifier:
         - You could use kwargs (dictionary) for any other variables you wish to pass in here.
         - You should use `opt_params` for your optimization and you are welcome to experiment.
         """
-        self.weights = torch.randn((opt_params.num_classes, opt_params.input_dim))
-        self.biases = torch.zeros((opt_params.num_classes, ))
+        self.weights = torch.randn(
+            (opt_params.num_classes, opt_params.input_dim))
+        self.biases = torch.zeros((opt_params.num_classes,))
         self.opt_params = opt_params
         self.kwargs = kwargs
 
@@ -108,18 +121,54 @@ class MusicClassifier:
         """
         feats = torch.tensor([])
         for wav in wavs:
-            spec = torchaudio.transforms.MelSpectrogram(
-                    sample_rate=self.opt_params.sr,
-                    n_fft=self.opt_params.n_fft,
-                    hop_length=self.opt_params.hop_len,
-                    n_mels=self.opt_params.n_mels)(wav)
-            spec = torchaudio.transforms.AmplitudeToDB(top_db=80.0)(spec)
-            # plt.imshow(spec)
-            # plt.show()
-            spec = spec.flatten(start_dim=0)
-            spec = torch.nn.functional.normalize(spec, dim=0)
-            feats = torch.cat((feats, spec))
+            mel_Spec = self.extract_mel_spec(wav)
+            spec = self.extract_spec(wav)
+            sc = self.extract_SpectralCentroid(wav)
+            mfcc = self.extract_MFCC(wav)
+            feature = torch.hstack((mel_Spec, sc, mfcc,spec)).flatten()
+            feats = torch.cat((feats, feature))
         return feats.reshape(len(wavs), -1)
+
+    def extract_mel_spec(self, wav):
+        mel_spec_transform = torchaudio.transforms.MelSpectrogram(
+            sample_rate=self.opt_params.sr,
+            n_fft=self.opt_params.n_fft,
+            hop_length=self.opt_params.hop_len,
+            n_mels=self.opt_params.n_mels)
+        mel_spec = mel_spec_transform(wav)
+        # mel_spec = torchaudio.transforms.AmplitudeToDB(top_db=80)(mel_spec)
+        mel_spec = mel_spec.flatten(start_dim=0)
+        mel_spec = torch.nn.functional.normalize(mel_spec, dim=0)
+        return mel_spec
+
+    def extract_MFCC(self, wav):
+        mfcc_transform = torchaudio.transforms.MFCC(
+            sample_rate=self.opt_params.sr,
+            n_mfcc=10,
+            melkwargs={'hop_length': self.opt_params.hop_len,
+                       'n_fft': self.opt_params.n_fft})
+        mfccs = mfcc_transform(wav)
+        mfccs = mfccs.flatten(start_dim=0)
+        return torch.nn.functional.normalize(mfccs, dim=0)
+
+    def extract_SpectralCentroid(self, wav):
+        sc_transform = torchaudio.transforms.SpectralCentroid(
+            sample_rate=self.opt_params.sr,
+            hop_length=self.opt_params.hop_len,
+            n_fft=self.opt_params.n_fft)
+        centroid = sc_transform(wav)
+        centroid = centroid.flatten(start_dim=0)
+        return torch.nn.functional.normalize(centroid, dim=0)
+
+    def extract_spec(self, wav):
+        spec_transform = torchaudio.transforms.Spectrogram(
+            n_fft=self.opt_params.n_fft,
+            hop_length=self.opt_params.hop_len,
+            normalized=True)
+        spec = spec_transform(wav)
+        # spec = torchaudio.transforms.AmplitudeToDB(top_db=80)(spec)
+        spec = spec.flatten(start_dim=0)
+        return torch.nn.functional.normalize(spec, dim=0)
 
     def forward(self, feats: torch.Tensor) -> tp.Any:
         """
@@ -127,10 +176,11 @@ class MusicClassifier:
         outputting scores for every class.
         feats: batch of extracted features.
         """
-        x = torch.matmul(feats, self.weights.t()) + self.biases
+        x = feats @ self.weights.T + self.biases
         return torch.sigmoid(x)
 
-    def backward(self, feats: torch.Tensor, output_scores: torch.Tensor, labels: torch.Tensor):
+    def backward(self, feats: torch.Tensor, output_scores: torch.Tensor,
+                 labels: torch.Tensor):
         """
         this function should perform a backward pass through the model.
         - calculate loss
@@ -142,20 +192,17 @@ class MusicClassifier:
         OptimizationParameters are passed to the initialization function
         """
         # Calculate loss
-        labels = labels.reshape((len(labels), 1))
-        new_labels = torch.zeros((len(labels), 3))
-        new_labels.scatter_(1, labels, 1)
-        loss = -(new_labels * torch.log(output_scores) +
-                 (1-new_labels) * torch.log(1-output_scores)).mean()
+        loss = -(labels * torch.log(output_scores) +
+                 (1 - labels) * torch.log(1 - output_scores)).mean()
 
         # Calculate gradients
-        dL_dy = (output_scores-new_labels)
-        dL_dw = torch.matmul(feats.T, dL_dy)
+        dL_dy = output_scores - labels
+        dL_dw = feats.T @ dL_dy
         dL_db = torch.sum(dL_dy, dim=0)
 
         # Update gradients using SGD
-        self.weights = self.weights - self.opt_params.learning_rate * dL_dw.t()
-        self.biases = self.biases - self.opt_params.learning_rate * dL_db
+        self.weights -= self.opt_params.learning_rate * dL_dw.T
+        self.biases -= self.opt_params.learning_rate * dL_db
 
         return loss
 
@@ -165,7 +212,7 @@ class MusicClassifier:
         should return a tuple: (weights, biases)
         """
         return self.weights, self.biases
-    
+
     def classify(self, wavs: torch.Tensor) -> torch.Tensor:
         """
         this method should receive a torch.Tensor of shape [batch, channels, time] (float tensor)
@@ -187,24 +234,28 @@ class MusicClassifier:
 class ClassifierHandler:
 
     @staticmethod
-    def train_new_model(training_parameters: TrainingParameters) -> MusicClassifier:
+    def train_new_model(
+            training_parameters: TrainingParameters) -> MusicClassifier:
         """
-        This function should create a new 'MusicClassifier' object and train it from scratch.
+        This function should create a new 'MusicClassifier' object and train
+        it from scratch.
         You could program your training loop / training manager as you see fit.
         """
         model = MusicClassifier(OptimizationParameters())
+        x_train, y_train = training_parameters.train_data
 
         for epoch in range(training_parameters.num_epochs):
             epoch_loss = 0.0
-            x_train, y_train = training_parameters.train_data
             for i in range(len(x_train)):  # Batch
                 batch_wavs, batch_labels = x_train[i], y_train[i]
                 feats = model.extract_feats(batch_wavs)
                 output_scores = model.forward(feats)
-                loss = model.backward(feats, output_scores, batch_labels)
+                loss = model.backward(feats, output_scores,
+                                      convert_labels_tensor(batch_labels))
                 epoch_loss += loss
 
-            print(f"Epoch {epoch+1}: Batch Loss = {epoch_loss / len(training_parameters.train_data)}")
+            print(f"Epoch {epoch + 1}: Batch Loss ="
+                  f" {epoch_loss / len(training_parameters.train_data)}")
 
         model_dict = {"weights": model.weights, "biases": model.biases}
         torch.save(model_dict, 'model_files/music_classifier.pt')
@@ -243,7 +294,8 @@ def main():
     train_params = TrainingParameters()
     ClassifierHandler.train_new_model(train_params)
     model = ClassifierHandler.get_pretrained_model()
-    accuracy = ClassifierHandler.test_music_classifier_accuracy(model, train_params.test_data)
+    accuracy = ClassifierHandler. \
+        test_music_classifier_accuracy(model, train_params.test_data)
     print(accuracy)
 
 
