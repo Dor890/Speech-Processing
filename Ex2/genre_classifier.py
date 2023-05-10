@@ -28,7 +28,7 @@ class TrainingParameters:
     default values (so run won't break when we test this).
     """
     batch_size: int = 32
-    num_epochs: int = 20  # Should be 100
+    num_epochs: int = 5  # Should be 100
     train_json_path: str = "jsons/train.json"
     test_json_path: str = "jsons/test.json"
 
@@ -75,7 +75,7 @@ class OptimizationParameters:
     This dataclass defines optimization related hyper-parameters to be passed to the model.
     feel free to add/change it as you see fit.
     """
-    learning_rate: float = 0.02
+    learning_rate: float = 0.02  # Should be lower
     num_classes: int = 3
     input_dim: int = 66560
     sr: int = 16000
@@ -143,16 +143,18 @@ class MusicClassifier:
         """
         # Calculate loss
         labels = labels.reshape((len(labels), 1))
-        loss = -(labels * torch.log(output_scores) +
-                 (1-labels) * torch.log(1-output_scores)).mean()
+        new_labels = torch.zeros((len(labels), 3))
+        new_labels.scatter_(1, labels, 1)
+        loss = -(new_labels * torch.log(output_scores) +
+                 (1-new_labels) * torch.log(1-output_scores)).mean()
 
         # Calculate gradients
-        dL_dy = (output_scores-labels) / len(labels)
+        dL_dy = (output_scores-new_labels)
         dL_dw = torch.matmul(feats.T, dL_dy)
         dL_db = torch.sum(dL_dy, dim=0)
 
         # Update gradients using SGD
-        self.weights = self.weights - self.opt_params.learning_rate * dL_dw
+        self.weights = self.weights - self.opt_params.learning_rate * dL_dw.t()
         self.biases = self.biases - self.opt_params.learning_rate * dL_db
 
         return loss
@@ -202,7 +204,7 @@ class ClassifierHandler:
                 loss = model.backward(feats, output_scores, batch_labels)
                 epoch_loss += loss
 
-            print(f"Epoch {epoch}: Loss = {epoch_loss / len(training_parameters.train_data)}")
+            print(f"Epoch {epoch+1}: Batch Loss = {epoch_loss / len(training_parameters.train_data)}")
 
         model_dict = {"weights": model.weights, "biases": model.biases}
         torch.save(model_dict, 'model_files/music_classifier.pt')
