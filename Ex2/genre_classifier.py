@@ -29,7 +29,7 @@ class TrainingParameters:
     default values (so run won't break when we test this).
     """
     batch_size: int = 32
-    num_epochs: int = 5  # Should be 100
+    num_epochs: int = 100  # Should be 100
     train_json_path: str = "jsons/train.json"
     test_json_path: str = "jsons/test.json"
 
@@ -80,7 +80,7 @@ class OptimizationParameters:
     This dataclass defines optimization related hyper-parameters to be passed to the model.
     feel free to add/change it as you see fit.
     """
-    learning_rate: float = 0.02  # Should be lower
+    learning_rate: float = 0.002  # Should be lower
     num_classes: int = 3
     input_dim: int = 339040
     sr: int = 16000
