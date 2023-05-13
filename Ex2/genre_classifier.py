@@ -1,5 +1,4 @@
 from abc import abstractmethod
-import math
 import torch
 import torchaudio
 from enum import Enum
@@ -7,6 +6,9 @@ import typing as tp
 from dataclasses import dataclass
 import json
 import matplotlib.pyplot as plt
+
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class Genre(Enum):
@@ -29,7 +31,7 @@ class TrainingParameters:
     default values (so run won't break when we test this).
     """
     batch_size: int = 32
-    num_epochs: int = 100  # Should be 100
+    num_epochs: int = 10
     train_json_path: str = "jsons/train.json"
     test_json_path: str = "jsons/test.json"
 
@@ -39,12 +41,12 @@ class TrainingParameters:
         indices = torch.randperm(x_train.size()[0])
         x_train, y_train = x_train[indices], y_train[indices]
         x_train, y_train = torch.split(x_train, self.batch_size), \
-                           torch.split(y_train, self.batch_size)  # 32 Batches
+                           torch.split(y_train, self.batch_size)  # 34 Batches
         self.train_data = (x_train, y_train)
 
         x_test, y_test = self.load_json(self.test_json_path)
         indices = torch.randperm(x_test.size()[0])
-        x_test, y_test = x_test[indices], y_test[indices]
+        x_test, y_test = x_test[indices], y_test[indices]  # 1 Batch
         self.test_data = (x_test, y_test)
 
     @staticmethod
@@ -80,13 +82,13 @@ class OptimizationParameters:
     This dataclass defines optimization related hyper-parameters to be passed to the model.
     feel free to add/change it as you see fit.
     """
-    learning_rate: float = 0.002  # Should be lower
+    learning_rate: float = 0.05
     num_classes: int = 3
-    input_dim: int = 339040
+    input_dim: int = 168480
     sr: int = 16000
-    n_fft: int = 1024
-    hop_len: int = 512
-    n_mels: int = 128
+    n_fft: int = 512
+    hop_len: int = 128
+    n_mels: int = 80
 
 
 def convert_labels_tensor(labels):
@@ -108,9 +110,9 @@ class MusicClassifier:
         - You could use kwargs (dictionary) for any other variables you wish to pass in here.
         - You should use `opt_params` for your optimization and you are welcome to experiment.
         """
-        self.weights = torch.randn(
-            (opt_params.num_classes, opt_params.input_dim))
-        self.biases = torch.zeros((opt_params.num_classes,))
+        self.weights = torch.zeros(
+            (opt_params.num_classes, opt_params.input_dim)).to(device)
+        self.biases = torch.zeros((opt_params.num_classes,)).to(device)
         self.opt_params = opt_params
         self.kwargs = kwargs
 
@@ -121,11 +123,12 @@ class MusicClassifier:
         """
         feats = torch.tensor([])
         for wav in wavs:
-            mel_Spec = self.extract_mel_spec(wav)
-            spec = self.extract_spec(wav)
-            sc = self.extract_SpectralCentroid(wav)
-            mfcc = self.extract_MFCC(wav)
-            feature = torch.hstack((mel_Spec, sc, mfcc,spec)).flatten()
+            mel_spec = self.extract_mel_spec(wav)
+            # spec = self.extract_spec(wav)
+            sc = self.extract_spectral_centroid(wav)
+            # mfcc = self.extract_MFCC(wav)
+            feature = torch.hstack((mel_spec, sc)).flatten()
+            # feature = mel_spec.flatten()
             feats = torch.cat((feats, feature))
         return feats.reshape(len(wavs), -1)
 
@@ -136,7 +139,9 @@ class MusicClassifier:
             hop_length=self.opt_params.hop_len,
             n_mels=self.opt_params.n_mels)
         mel_spec = mel_spec_transform(wav)
-        # mel_spec = torchaudio.transforms.AmplitudeToDB(top_db=80)(mel_spec)
+        mel_spec = torchaudio.transforms.AmplitudeToDB()(mel_spec)
+        # plt.imshow(mel_spec)
+        # plt.show()
         mel_spec = mel_spec.flatten(start_dim=0)
         mel_spec = torch.nn.functional.normalize(mel_spec, dim=0)
         return mel_spec
@@ -151,12 +156,14 @@ class MusicClassifier:
         mfccs = mfccs.flatten(start_dim=0)
         return torch.nn.functional.normalize(mfccs, dim=0)
 
-    def extract_SpectralCentroid(self, wav):
+    def extract_spectral_centroid(self, wav):
         sc_transform = torchaudio.transforms.SpectralCentroid(
             sample_rate=self.opt_params.sr,
             hop_length=self.opt_params.hop_len,
             n_fft=self.opt_params.n_fft)
         centroid = sc_transform(wav)
+        # plt.plot(centroid)
+        # plt.show()
         centroid = centroid.flatten(start_dim=0)
         return torch.nn.functional.normalize(centroid, dim=0)
 
@@ -166,7 +173,7 @@ class MusicClassifier:
             hop_length=self.opt_params.hop_len,
             normalized=True)
         spec = spec_transform(wav)
-        # spec = torchaudio.transforms.AmplitudeToDB(top_db=80)(spec)
+        spec = torchaudio.transforms.AmplitudeToDB(top_db=80)(spec)
         spec = spec.flatten(start_dim=0)
         return torch.nn.functional.normalize(spec, dim=0)
 
@@ -176,6 +183,7 @@ class MusicClassifier:
         outputting scores for every class.
         feats: batch of extracted features.
         """
+        feats.to(device)
         x = feats @ self.weights.T + self.biases
         return torch.sigmoid(x)
 
@@ -247,9 +255,10 @@ class ClassifierHandler:
         for epoch in range(training_parameters.num_epochs):
             epoch_loss = 0.0
             for i in range(len(x_train)):  # Batch
-                batch_wavs, batch_labels = x_train[i], y_train[i]
-                feats = model.extract_feats(batch_wavs)
-                output_scores = model.forward(feats)
+                batch_wavs, batch_labels =\
+                    x_train[i].to(device), y_train[i].to(device)
+                feats = model.extract_feats(batch_wavs).to(device)
+                output_scores = model.forward(feats).to(device)
                 loss = model.backward(feats, output_scores,
                                       convert_labels_tensor(batch_labels))
                 epoch_loss += loss
