@@ -129,7 +129,6 @@ class MusicClassifier:
             zrc = self.extract_zrc(wav_numpy)
             rms = self.extract_rms(wav_numpy)
             spec_cons = self.extract_spectral_contrast(wav_numpy)
-
             feature = torch.hstack((mel_Spec, sc, mfcc, zrc, rms, spec_cons))\
                 .flatten()
             feats = torch.cat((feats, feature))
