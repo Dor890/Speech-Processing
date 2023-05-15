@@ -2,6 +2,7 @@ from abc import abstractmethod
 import math
 import torch
 import torchaudio
+import librosa.feature as lib
 from enum import Enum
 import typing as tp
 from dataclasses import dataclass
@@ -29,7 +30,7 @@ class TrainingParameters:
     default values (so run won't break when we test this).
     """
     batch_size: int = 32
-    num_epochs: int = 100  # Should be 100
+    num_epochs: int = 10  # Should be 100
     train_json_path: str = "jsons/train.json"
     test_json_path: str = "jsons/test.json"
 
@@ -80,9 +81,9 @@ class OptimizationParameters:
     This dataclass defines optimization related hyper-parameters to be passed to the model.
     feel free to add/change it as you see fit.
     """
-    learning_rate: float = 0.002  # Should be lower
+    learning_rate: float = 0.05 # Should be lower
     num_classes: int = 3
-    input_dim: int = 339040
+    input_dim: int = 76960
     sr: int = 16000
     n_fft: int = 1024
     hop_len: int = 512
@@ -122,10 +123,15 @@ class MusicClassifier:
         feats = torch.tensor([])
         for wav in wavs:
             mel_Spec = self.extract_mel_spec(wav)
-            spec = self.extract_spec(wav)
             sc = self.extract_SpectralCentroid(wav)
             mfcc = self.extract_MFCC(wav)
-            feature = torch.hstack((mel_Spec, sc, mfcc,spec)).flatten()
+            wav_numpy = wav.numpy()
+            zrc = self.extract_zrc(wav_numpy)
+            rms = self.extract_rms(wav_numpy)
+            spec_cons = self.extract_spectral_contrast(wav_numpy)
+
+            feature = torch.hstack((mel_Spec, sc, mfcc, zrc, rms, spec_cons))\
+                .flatten()
             feats = torch.cat((feats, feature))
         return feats.reshape(len(wavs), -1)
 
@@ -136,7 +142,7 @@ class MusicClassifier:
             hop_length=self.opt_params.hop_len,
             n_mels=self.opt_params.n_mels)
         mel_spec = mel_spec_transform(wav)
-        # mel_spec = torchaudio.transforms.AmplitudeToDB(top_db=80)(mel_spec)
+        mel_spec = torchaudio.transforms.AmplitudeToDB(top_db=80)(mel_spec)
         mel_spec = mel_spec.flatten(start_dim=0)
         mel_spec = torch.nn.functional.normalize(mel_spec, dim=0)
         return mel_spec
@@ -160,15 +166,23 @@ class MusicClassifier:
         centroid = centroid.flatten(start_dim=0)
         return torch.nn.functional.normalize(centroid, dim=0)
 
-    def extract_spec(self, wav):
-        spec_transform = torchaudio.transforms.Spectrogram(
-            n_fft=self.opt_params.n_fft,
-            hop_length=self.opt_params.hop_len,
-            normalized=True)
-        spec = spec_transform(wav)
-        # spec = torchaudio.transforms.AmplitudeToDB(top_db=80)(spec)
-        spec = spec.flatten(start_dim=0)
-        return torch.nn.functional.normalize(spec, dim=0)
+    def extract_zrc(self, wav):
+        zrc = lib.zero_crossing_rate(y=wav,
+                                hop_length=self.opt_params.hop_len).flatten()
+        to_torch = torch.from_numpy(zrc).float()
+        return torch.nn.functional.normalize(to_torch, dim=0)
+
+    def extract_rms(self, wav: torch.Tensor):
+        rms = lib.rms(y=wav,hop_length=self.opt_params.hop_len).flatten()
+        to_torch = torch.from_numpy(rms).float()
+        return torch.nn.functional.normalize(to_torch, dim=0)
+
+    def extract_spectral_contrast(self, wav):
+        spec_constrast = lib.spectral_contrast(y=wav,
+                    sr=self.opt_params.sr, hop_length=self.opt_params.hop_len,
+                                        n_fft=self.opt_params.n_fft).flatten()
+        to_torch = torch.from_numpy(spec_constrast).float()
+        return torch.nn.functional.normalize(to_torch, dim=0)
 
     def forward(self, feats: torch.Tensor) -> tp.Any:
         """
