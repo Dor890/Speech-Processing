@@ -8,7 +8,6 @@ import json
 from datetime import datetime
 
 
-
 class Genre(Enum):
     """
     This enum class is optional and defined for your convenience, you are not required to use it.
@@ -46,7 +45,7 @@ class TrainingParameters:
             all_test = all_test[indices]
 
             waves, all_test = torch.split(waves, self.batch_size), \
-                               torch.split(all_test, self.batch_size)  # 32 Batches
+                torch.split(all_test, self.batch_size)  # 32 Batches
 
             self.train_data = waves, all_test
 
@@ -54,7 +53,7 @@ class TrainingParameters:
             indices = torch.randperm(x_train.size()[0])
             x_train, y_train = x_train[indices], y_train[indices]
             x_train, y_train = torch.split(x_train, self.batch_size), \
-                               torch.split(y_train, self.batch_size)  # 32 Batches
+                torch.split(y_train, self.batch_size)  # 32 Batches
 
             indices = torch.randperm(x_test.size()[0])
             x_test, y_test = x_test[indices], y_test[indices]
@@ -136,15 +135,20 @@ class MusicClassifier:
         """
         feats = torch.tensor([])
         for wav in wavs:
+            # extraction pipeline
             mel_Spec = self.extract_mel_spec(wav)
-            sc = self.extract_SpectralCentroid(wav)
+            sc = self.extract_spectral_centroid(wav)
             mfcc = self.extract_MFCC(wav)
             wav_numpy = wav.numpy()
             zrc = self.extract_zrc(wav_numpy)
             rms = self.extract_rms(wav_numpy)
             spec_cons = self.extract_spectral_contrast(wav_numpy)
-            feature = torch.hstack((mel_Spec, sc, mfcc, zrc, rms, spec_cons))\
+            
+            # stack features row
+            feature = torch.hstack((mel_Spec, sc, mfcc, zrc, rms, spec_cons)) \
                 .flatten()
+            
+            # stack to matrix
             feats = torch.cat((feats, feature))
         return feats.reshape(len(wavs), -1)
 
@@ -170,7 +174,7 @@ class MusicClassifier:
         mfccs = mfccs.flatten(start_dim=0)
         return torch.nn.functional.normalize(mfccs, dim=0)
 
-    def extract_SpectralCentroid(self, wav):
+    def extract_spectral_centroid(self, wav):
         sc_transform = torchaudio.transforms.SpectralCentroid(
             sample_rate=self.opt_params.sr,
             hop_length=self.opt_params.hop_len,
@@ -181,19 +185,19 @@ class MusicClassifier:
 
     def extract_zrc(self, wav):
         zrc = lib.zero_crossing_rate(y=wav,
-                                hop_length=self.opt_params.hop_len).flatten()
+                                     hop_length=self.opt_params.hop_len).flatten()
         to_torch = torch.from_numpy(zrc).float()
         return torch.nn.functional.normalize(to_torch, dim=0)
 
-    def extract_rms(self, wav: torch.Tensor):
-        rms = lib.rms(y=wav,hop_length=self.opt_params.hop_len).flatten()
+    def extract_rms(self, wav):
+        rms = lib.rms(y=wav, hop_length=self.opt_params.hop_len).flatten()
         to_torch = torch.from_numpy(rms).float()
         return torch.nn.functional.normalize(to_torch, dim=0)
 
     def extract_spectral_contrast(self, wav):
         spec_constrast = lib.spectral_contrast(y=wav,
-                    sr=self.opt_params.sr, hop_length=self.opt_params.hop_len,
-                                        n_fft=self.opt_params.n_fft).flatten()
+                                               sr=self.opt_params.sr, hop_length=self.opt_params.hop_len,
+                                               n_fft=self.opt_params.n_fft).flatten()
         to_torch = torch.from_numpy(spec_constrast).float()
         return torch.nn.functional.normalize(to_torch, dim=0)
 
@@ -335,4 +339,4 @@ def train_all_data():
 
 if __name__ == '__main__':
     # train_test_and_evaluate()
-    train_all_data()
+    # train_all_data()
