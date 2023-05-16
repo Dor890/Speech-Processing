@@ -1,5 +1,3 @@
-from abc import abstractmethod
-import math
 import torch
 import torchaudio
 import librosa.feature as lib
@@ -7,7 +5,8 @@ from enum import Enum
 import typing as tp
 from dataclasses import dataclass
 import json
-import matplotlib.pyplot as plt
+from datetime import datetime
+
 
 
 class Genre(Enum):
@@ -30,23 +29,38 @@ class TrainingParameters:
     default values (so run won't break when we test this).
     """
     batch_size: int = 32
-    num_epochs: int = 10  # Should be 100
+    num_epochs: int = 100  # Should be 100
     train_json_path: str = "jsons/train.json"
     test_json_path: str = "jsons/test.json"
 
-    def __init__(self, batch_size=32, num_epochs=100):
+    def __init__(self, batch_size=32, num_epochs=100, all_data=False):
         self.batch_size, num_epochs = batch_size, num_epochs
         x_train, y_train = self.load_json(self.train_json_path)
-        indices = torch.randperm(x_train.size()[0])
-        x_train, y_train = x_train[indices], y_train[indices]
-        x_train, y_train = torch.split(x_train, self.batch_size), \
-                           torch.split(y_train, self.batch_size)  # 32 Batches
-        self.train_data = (x_train, y_train)
-
         x_test, y_test = self.load_json(self.test_json_path)
-        indices = torch.randperm(x_test.size()[0])
-        x_test, y_test = x_test[indices], y_test[indices]
-        self.test_data = (x_test, y_test)
+
+        if all_data:
+            waves = torch.cat((x_train, x_test))
+            all_test = torch.cat((y_train, y_test))
+            indices = torch.randperm(waves.size()[0])
+            waves = waves[indices]
+            all_test = all_test[indices]
+
+            waves, all_test = torch.split(waves, self.batch_size), \
+                               torch.split(all_test, self.batch_size)  # 32 Batches
+
+            self.train_data = waves, all_test
+
+        else:
+            indices = torch.randperm(x_train.size()[0])
+            x_train, y_train = x_train[indices], y_train[indices]
+            x_train, y_train = torch.split(x_train, self.batch_size), \
+                               torch.split(y_train, self.batch_size)  # 32 Batches
+
+            indices = torch.randperm(x_test.size()[0])
+            x_test, y_test = x_test[indices], y_test[indices]
+
+            self.train_data = (x_train, y_train)
+            self.test_data = (x_test, y_test)
 
     @staticmethod
     def load_json(path):
@@ -81,7 +95,7 @@ class OptimizationParameters:
     This dataclass defines optimization related hyper-parameters to be passed to the model.
     feel free to add/change it as you see fit.
     """
-    learning_rate: float = 0.05 # Should be lower
+    learning_rate: float = 0.05
     num_classes: int = 3
     input_dim: int = 76960
     sr: int = 16000
@@ -303,7 +317,7 @@ class ClassifierHandler:
         return model
 
 
-def main():
+def train_test_and_evaluate():
     train_params = TrainingParameters()
     ClassifierHandler.train_new_model(train_params)
     model = ClassifierHandler.get_pretrained_model()
@@ -312,5 +326,13 @@ def main():
     print(accuracy)
 
 
+def train_all_data():
+    train_params = TrainingParameters(all_data=True)
+    print(f"start training all data at {datetime.now()}")
+    ClassifierHandler.train_new_model(train_params)
+    print(f"done trained. stop time:{datetime.now()}")
+
+
 if __name__ == '__main__':
-    main()
+    # train_test_and_evaluate()
+    train_all_data()
