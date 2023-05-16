@@ -37,7 +37,8 @@ class TrainingParameters:
         x_train, y_train = self.load_json(self.train_json_path)
         x_test, y_test = self.load_json(self.test_json_path)
 
-        if all_data:
+        if all_data: 
+            # train on all the data provided
             waves = torch.cat((x_train, x_test))
             all_test = torch.cat((y_train, y_test))
             indices = torch.randperm(waves.size()[0])
@@ -50,6 +51,7 @@ class TrainingParameters:
             self.train_data = waves, all_test
 
         else:
+            # split for model evaluation 
             indices = torch.randperm(x_train.size()[0])
             x_train, y_train = x_train[indices], y_train[indices]
             x_train, y_train = torch.split(x_train, self.batch_size), \
