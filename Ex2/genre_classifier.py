@@ -28,7 +28,7 @@ class TrainingParameters:
     default values (so run won't break when we test this).
     """
     batch_size: int = 32
-    num_epochs: int = 100  # Should be 100
+    num_epochs: int = 100
     train_json_path: str = "jsons/train.json"
     test_json_path: str = "jsons/test.json"
 
@@ -38,7 +38,7 @@ class TrainingParameters:
         x_test, y_test = self.load_json(self.test_json_path)
 
         if all_data: 
-            # train on all the data provided
+            # Train on all the data provided
             waves = torch.cat((x_train, x_test))
             all_test = torch.cat((y_train, y_test))
             indices = torch.randperm(waves.size()[0])
@@ -51,7 +51,7 @@ class TrainingParameters:
             self.train_data = waves, all_test
 
         else:
-            # split for model evaluation 
+            # Split for model evaluation
             indices = torch.randperm(x_train.size()[0])
             x_train, y_train = x_train[indices], y_train[indices]
             x_train, y_train = torch.split(x_train, self.batch_size), \
@@ -146,13 +146,15 @@ class MusicClassifier:
             rms = self.extract_rms(wav_numpy)
             spec_cons = self.extract_spectral_contrast(wav_numpy)
             
-            # stack features row
-            feature = torch.hstack((mel_Spec, sc, mfcc, zrc, rms, spec_cons)) \
-                .flatten()
+            # Stack features by row
+            feature = torch.hstack(
+                (mel_Spec, sc, mfcc, zrc, rms, spec_cons)).flatten()
             
-            # stack to matrix
+            # Concat to matrix
             feats = torch.cat((feats, feature))
         return feats.reshape(len(wavs), -1)
+
+    # --- Specific feature extraction methods ---
 
     def extract_mel_spec(self, wav):
         mel_spec_transform = torchaudio.transforms.MelSpectrogram(
@@ -186,8 +188,8 @@ class MusicClassifier:
         return torch.nn.functional.normalize(centroid, dim=0)
 
     def extract_zrc(self, wav):
-        zrc = lib.zero_crossing_rate(y=wav,
-                                     hop_length=self.opt_params.hop_len).flatten()
+        zrc = lib.zero_crossing_rate(
+            y=wav, hop_length=self.opt_params.hop_len).flatten()
         to_torch = torch.from_numpy(zrc).float()
         return torch.nn.functional.normalize(to_torch, dim=0)
 
@@ -197,11 +199,13 @@ class MusicClassifier:
         return torch.nn.functional.normalize(to_torch, dim=0)
 
     def extract_spectral_contrast(self, wav):
-        spec_constrast = lib.spectral_contrast(y=wav,
-                                               sr=self.opt_params.sr, hop_length=self.opt_params.hop_len,
-                                               n_fft=self.opt_params.n_fft).flatten()
+        spec_constrast = lib.spectral_contrast(
+            y=wav, sr=self.opt_params.sr, hop_length=self.opt_params.hop_len,
+            n_fft=self.opt_params.n_fft).flatten()
         to_torch = torch.from_numpy(spec_constrast).float()
         return torch.nn.functional.normalize(to_torch, dim=0)
+
+    # --- End of feature extraction methods ---
 
     def forward(self, feats: torch.Tensor) -> tp.Any:
         """
@@ -329,16 +333,16 @@ def train_test_and_evaluate():
     model = ClassifierHandler.get_pretrained_model()
     accuracy = ClassifierHandler. \
         test_music_classifier_accuracy(model, train_params.test_data)
-    print(accuracy)
+    print("Accuracy:", accuracy)
 
 
 def train_all_data():
     train_params = TrainingParameters(all_data=True)
-    print(f"start training all data at {datetime.now()}")
     ClassifierHandler.train_new_model(train_params)
-    print(f"done trained. stop time:{datetime.now()}")
 
 
 if __name__ == '__main__':
+    print(f"Start training on all data at {datetime.now()}")
     # train_test_and_evaluate()
     # train_all_data()
+    print(f"Done training. Stop time:{datetime.now()}")
