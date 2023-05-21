@@ -3,6 +3,7 @@ import torch
 import librosa
 import torchaudio
 import typing as tp
+import numpy as np
 
 from abc import abstractmethod
 from dataclasses import dataclass
@@ -123,15 +124,32 @@ class DigitClassifier:
         predictions = []
 
         for wave in audio_files:
+            dtw_mat = []
             mfcc = mfcc_transform(wave)
-            best_dist, best_label = float('inf'), None
-            for i, x in enumerate(self.x_train):
-                cur_dist = torch.sum(pairwise_distance(mfcc, x, p=2))
-                if cur_dist < best_dist:
-                    best_dist, best_label = cur_dist, self.y_train[i]
+            for x in self.x_train:
+                dtw_mat.append(self.DTW_distance(mfcc[0], x[0]))
+            best_label = self.y_train[dtw_mat.index(min(dtw_mat))]
             predictions.append(best_label)
 
         return predictions
+
+    @staticmethod
+    def DTW_distance(x, y):
+        n, m = len(x), len(y)
+        dtw_mat = np.zeros((n, m))
+        dtw_mat[0, 0] = torch.sum(pairwise_distance(x[0], y[0], p=2))
+
+        for i in range(1, n):
+            dtw_mat[i, 0] = torch.sum(pairwise_distance(x[i], y[0], p=2)) + dtw_mat[i - 1, 0]
+
+        dtw_mat[0, 1] = torch.sum(pairwise_distance(x[0], y[1], p=2)) + dtw_mat[0, 0]
+
+        for i in range(1, n):
+            for j in range(1, m):
+                cost = torch.sum(pairwise_distance(x[i], y[j], p=2))
+                dtw_mat[j, i] = cost + min(dtw_mat[i - 1, j], dtw_mat[i, j - 1], dtw_mat[i - 1, j - 1])
+
+        return dtw_mat[n-1, m-1]
 
     @abstractmethod
     def classify(self, audio_files: tp.List[str]) -> tp.List[str]:
