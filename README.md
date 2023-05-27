@@ -16,6 +16,8 @@ Exercise 2 focuses on music classification using different features. We implemen
 ## Exercise 3
 In Exercise 3, We delved into digit audio classification. This exercise specifically uses MFCC and DTW (Dynamic Time Warping) to build a classifier for recognizing spoken digits. By working on this exercise, We have gained practical knowledge of applying MFCC and DTW in the context of speech recognition.
 
+![image](https://github.com/Dor890/Speech-Processing/assets/64433958/436f4767-37c2-4b75-96ce-19d11acbbb92)
+
 
 ## Exercise 4
 Exercise 4 is currently in progress and will be uploaded soon. Stay tuned for the latest updates!
