@@ -1,7 +1,6 @@
 import os
 import torch
 import librosa.feature
-import torchaudio
 import typing as tp
 import numpy as np
 
@@ -9,7 +8,6 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from word2number import w2n
-from torch.nn.functional import pairwise_distance
 
 TRAIN_PATH = "./train_files"
 TEST_PATH = "./test_files"
@@ -112,7 +110,8 @@ class DigitClassifier:
         tp.List[str], torch.Tensor]) -> tp.List[int]:
         """
         function to classify a given audio using DTW distance.
-        audio_files: list of audio file paths or a a batch of audio files of shape [Batch, Channels, Time]
+        audio_files: list of audio file paths or
+        a a batch of audio files of shape [Batch, Channels, Time]
         return: list of predicted label for each batch entry
         """
 
