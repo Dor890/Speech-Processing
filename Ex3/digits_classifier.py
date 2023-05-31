@@ -1,7 +1,6 @@
 import os
 import torch
-import librosa
-import torchaudio
+import librosa.feature
 import typing as tp
 import numpy as np
 
@@ -9,7 +8,6 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from word2number import w2n
-from torch.nn.functional import pairwise_distance
 
 TRAIN_PATH = "./train_files"
 TEST_PATH = "./test_files"
@@ -41,93 +39,92 @@ class ClassifierArgs:
     # You may add other args here
     def __init__(self):
         x_train, y_train = self.load_train(self.path_to_training_data_dir)
-        # self.path_to_testing_data_dir = self.load_test(self.path_to_testing_data_dir)
         self.train_data = (x_train, y_train)
 
     @staticmethod
-    def load_train(path: str) -> tp.Tuple[torch.Tensor, torch.Tensor]:
+    def load_train(path: str):
         digit_directories = ["one", "two", "three", "four", "five"]
         audio_data, labels = [], []
-        mfcc_transform = torchaudio.transforms.MFCC(
-            sample_rate=SR, n_mfcc=N_MFCC)
 
         for digit_dir in digit_directories:
             digit_path = os.path.join(path, digit_dir)
             for filename in os.listdir(digit_path):
-                if filename == ".DS_Store":
-                    continue
-                file_path = os.path.join(digit_path, filename)
-                waveform, sample_rate = torchaudio.load(file_path)
-                mfcc = mfcc_transform(waveform)
-                # mfcc = mfcc.flatten(start_dim=0)
-                # mfcc = torch.nn.functional.normalize(mfcc, dim=0)
-                audio_data.append(mfcc)
-                labels.append(w2n.word_to_num(digit_dir))
+                if filename.endswith(".wav"):
+                    file_path = os.path.join(digit_path, filename)
+                    waveform, sample_rate = librosa.load(file_path, sr=SR)
+                    mfcc = librosa.feature.mfcc(y=waveform, sr=SR, n_mfcc=N_MFCC)
+                    audio_data.append(mfcc)
+                    labels.append(w2n.word_to_num(digit_dir))
 
-        x_train = torch.stack(audio_data)
-        y_train = torch.tensor(labels)
+        x_train = audio_data
+        y_train = labels
 
         return x_train, y_train
 
     @staticmethod
     def load_test(path: str):
         audio_data, labels = [], []
-
         for filename in os.listdir(path)[1:]:
             file_path = os.path.join(path, filename)
-            waveform, sample_rate = torchaudio.load(file_path)
+            waveform, _ = librosa.load(file_path, sr=SR)
             audio_data.append(waveform)
 
-        test_tensor = torch.stack(audio_data)
-
-        return test_tensor
+        return audio_data
 
 
 class DigitClassifier:
     """
     You should Implement your classifier object here
     """
+
     def __init__(self, args: ClassifierArgs):
         self.x_train, self.y_train = args.train_data
 
     @abstractmethod
-    def classify_using_eucledian_distance(self, audio_files: tp.Union[tp.List[str], torch.Tensor]) -> tp.List[int]:
+    def classify_using_eucledian_distance(self, audio_files: tp.Union[
+        tp.List[str], torch.Tensor]) -> tp.List[int]:
         """
         function to classify a given audio using euclidean distance.
         audio_files: list of audio file paths or a batch of audio files of shape [Batch, Channels, Time]
         return: list of predicted label for each batch entry
         """
-        mfcc_transform = torchaudio.transforms.MFCC(sample_rate=SR,
-                                                    n_mfcc=N_MFCC)
         predictions = []
 
-        for wave in audio_files:
-            mfcc = mfcc_transform(wave)
+        for path in audio_files:
+            wave, _ = librosa.load(path, sr=SR)
+            mfcc = librosa.feature.mfcc(y=wave, sr=SR, n_mfcc=N_MFCC)
             best_dist, best_label = float('inf'), None
+
             for i, x in enumerate(self.x_train):
-                cur_dist = torch.sum(pairwise_distance(mfcc, x, p=2))
+                cur_dist = np.linalg.norm(mfcc - x)
+
                 if cur_dist < best_dist:
                     best_dist, best_label = cur_dist, self.y_train[i]
+
             predictions.append(best_label)
 
         return predictions
 
     @abstractmethod
-    def classify_using_DTW_distance(self, audio_files: tp.Union[tp.List[str], torch.Tensor]) -> tp.List[int]:
+    def classify_using_DTW_distance(self, audio_files: tp.Union[
+        tp.List[str], torch.Tensor]) -> tp.List[int]:
         """
         function to classify a given audio using DTW distance.
-        audio_files: list of audio file paths or a a batch of audio files of shape [Batch, Channels, Time]
+        audio_files: list of audio file paths or
+        a a batch of audio files of shape [Batch, Channels, Time]
         return: list of predicted label for each batch entry
         """
-        mfcc_transform = torchaudio.transforms.MFCC(sample_rate=SR,
-                                                    n_mfcc=N_MFCC)
-        predictions = []
 
-        for wave in audio_files:
+        predictions = []
+        for path in audio_files:
+
             dtw_mat = []
-            mfcc = mfcc_transform(wave)
+            wave, _ = librosa.load(path, sr=SR)
+            mfcc = librosa.feature.mfcc(y=wave, sr=SR, n_mfcc=N_MFCC)
+
             for x in self.x_train:
                 dtw_mat.append(self.DTW_distance(mfcc[0], x[0]))
+
             best_label = self.y_train[dtw_mat.index(min(dtw_mat))]
             predictions.append(best_label)
 
@@ -137,19 +134,21 @@ class DigitClassifier:
     def DTW_distance(x, y):
         n, m = len(x), len(y)
         dtw_mat = np.zeros((n, m))
-        dtw_mat[0, 0] = torch.sum(pairwise_distance(x[0], y[0], p=2))
+        dtw_mat[0, 0] = np.linalg.norm(x[0] - y[0])
 
         for i in range(1, n):
-            dtw_mat[i, 0] = torch.sum(pairwise_distance(x[i], y[0], p=2)) + dtw_mat[i - 1, 0]
+            dtw_mat[i, 0] = np.linalg.norm(x[i] - y[0]) + dtw_mat[i - 1, 0]
 
-        dtw_mat[0, 1] = torch.sum(pairwise_distance(x[0], y[1], p=2)) + dtw_mat[0, 0]
+        dtw_mat[0, 1] = np.linalg.norm(x[0] - y[1]) + dtw_mat[0, 0]
 
         for i in range(1, n):
             for j in range(1, m):
-                cost = torch.sum(pairwise_distance(x[i], y[j], p=2))
-                dtw_mat[j, i] = cost + min(dtw_mat[i - 1, j], dtw_mat[i, j - 1], dtw_mat[i - 1, j - 1])
+                cost = np.linalg.norm(x[i] - y[j])
+                dtw_mat[j, i] = cost + min(dtw_mat[i - 1, j],
+                                           dtw_mat[i, j - 1],
+                                           dtw_mat[i - 1, j - 1])
 
-        return dtw_mat[n-1, m-1]
+        return dtw_mat[n - 1, m - 1]
 
     @abstractmethod
     def classify(self, audio_files: tp.List[str]) -> tp.List[str]:
@@ -159,21 +158,21 @@ class DigitClassifier:
         return: a list of strings of the following format: '{filename} - {predict using euclidean distance} - {predict using DTW distance}'
         Note: filename should not include parent path, but only the file name itself.
         """
-        waves, files, predictions = [], [], []
+        waves_paths, files, predictions = [], [], []
 
         for file_path in os.listdir(audio_files)[1:]:
             path = os.path.join(audio_files, file_path)
             if not os.path.exists(path):
                 raise FileNotFoundError(f"File {path} does not exist")
             files.append(file_path)
-            waveform, sr = torchaudio.load(path)
-            waves.append(waveform)
+            waves_paths.append(path)
 
-        euc_predictions = self.classify_using_eucledian_distance(waves)
-        dtw_predictions = self.classify_using_DTW_distance(waves)
+        euc_predictions = self.classify_using_eucledian_distance(waves_paths)
+        dtw_predictions = self.classify_using_DTW_distance(waves_paths)
 
         for i in range(len(files)):
-            predictions.append(f"{files[i]} - {euc_predictions[i]} - {dtw_predictions[i]}")
+            predictions.append(
+                f"{files[i]} - {euc_predictions[i]} - {dtw_predictions[i]}")
 
         return predictions
 
@@ -199,7 +198,7 @@ def evaluate_model(model):
     test_path = TEST_PATH
     predictions = model.classify(test_path)
     with open(OUTPUT_PATH, "w") as file:
-        file.writelines(line+'\n' for line in predictions)
+        file.writelines(line + '\n' for line in predictions)
 
 
 if __name__ == '__main__':
