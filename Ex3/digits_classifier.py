@@ -1,10 +1,8 @@
 import os
 import torch
-import librosa
 import torchaudio
 import typing as tp
 import numpy as np
-from fastdtw import fastdtw
 
 from abc import abstractmethod
 from dataclasses import dataclass
@@ -18,7 +16,6 @@ OUTPUT_PATH = "output.txt"
 CLASSIFIER_PATH = "digit_classifier.pt"
 
 N_MFCC = 20
-
 
 @dataclass
 class ClassifierArgs:
@@ -34,9 +31,6 @@ class ClassifierArgs:
     # You may assume the train data is the same
     path_to_training_data_dir: str = TRAIN_PATH
     path_to_testing_data_dir: str = TEST_PATH
-    batch_size: int = 32
-    num_epochs: int = 100
-    sr = 16000
 
     # You may add other args here
     def __init__(self):
@@ -102,7 +96,8 @@ class DigitClassifier:
         tp.List[str], torch.Tensor]) -> tp.List[int]:
         """
         function to classify a given audio using euclidean distance.
-        audio_files: list of audio file paths or a batch of audio files of shape [Batch, Channels, Time]
+        audio_files: list of audio file paths or a batch of audio files of
+         shape [Batch, Channels, Time]
         return: list of predicted label for each batch entry
         """
         mfcc_transform = torchaudio.transforms.MFCC(n_mfcc=N_MFCC)
@@ -127,7 +122,8 @@ class DigitClassifier:
         tp.List[str], torch.Tensor]) -> tp.List[int]:
         """
         function to classify a given audio using DTW distance.
-        audio_files: list of audio file paths or a a batch of audio files of shape [Batch, Channels, Time]
+        audio_files: list of audio file paths or a a batch of audio files
+         of shape [Batch, Channels, Time]
         return: list of predicted label for each batch entry
         """
         mfcc_transform = torchaudio.transforms.MFCC(n_mfcc=N_MFCC)
@@ -199,7 +195,6 @@ class DigitClassifier:
 
 
 class ClassifierHandler:
-
     @staticmethod
     def get_pretrained_model() -> DigitClassifier:
         """
@@ -236,26 +231,3 @@ if __name__ == '__main__':
     model = ClassifierHandler.get_pretrained_model()
     evaluate_model(model)
     print(f"Done training. Stop time:{datetime.now()}")
-    # test_paths = [
-    #     path
-    #     for path in [
-    #         os.path.join(TEST_PATH, name)
-    #         for name in sorted(os.listdir(TEST_PATH))
-    #     ]
-    # ]
-    # true_labels = [4, 2, 2, 1, 5, 4, 2, 1, 5, 4, 4, 2, 3, 2, 2, 1, 5, 4, 3, 4,
-    #                4, 4, 4, 1, 2, 2, 2, 3, 2, 1, 3, 2, 4,
-    #                1, 1, 1, 1, 5, 1, 2, 3, 2, 1, 5, 4, 5, 2, 3, 2, 4]
-    # print('"' + '",\n "'.join(test_paths[len(true_labels):50]) + '"')
-    # pred = model.classify_using_DTW_distance(test_paths[:len(true_labels)])
-    # e_pred = model.classify_using_eucledian_distance(
-    #     test_paths[:len(true_labels)])
-    # for i in range(1, 6):
-    #     m = sum([1 if t == i else 0 for t in true_labels])
-    #     pred_acc = sum([1 if p == t and t == i else 0 for p, t in
-    #                     zip(pred, true_labels)]) / m
-    #     e_pred_acc = sum([1 if p == t and t == i else 0 for p, t in
-    #                       zip(e_pred, true_labels)]) / m
-    #     print(e_pred_acc, pred_acc)
-    # print(sum([1 if p == t else 0 for p, t in zip(pred, true_labels)]) / len(
-    #     true_labels))
