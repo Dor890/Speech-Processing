@@ -7,7 +7,7 @@ BLANK = 'ϵ'
 def ctc(y, label, tokens):
     T, K = y.shape
     L = len(label)
-    blank_index = tokens.index(BLANK)
+    blank_index = tokens.index(BLANK) if BLANK in tokens else -1
     # Initialize z
     z = [BLANK]
     for i in range(L):
@@ -24,15 +24,15 @@ def ctc(y, label, tokens):
         alpha[0][t] = alpha[0][t-1] * y[t][blank_index]
         alpha[1][t] = (alpha[0][t-1] + alpha[1][t-1]) * y[t][tokens.index(label[0])]
         for s in range(2, len(z)):  # len(z) = 2L + 1
-            zs_idx = tokens.index(label[s])
+            zs_idx = tokens.index(z[s]) if z[s] in tokens else -1
             cur_y = y[t][zs_idx]
-            if z[s] == BLANK or (s >= 2 and z[s] == z[s-2]):
-                alpha[s][t] += (alpha[s-1][t-1] + alpha[s][t-1]) * cur_y
+            if z[s] == BLANK or z[s] == z[s-2]:
+                alpha[s][t] = (alpha[s-1][t-1] + alpha[s][t-1]) * cur_y
             else:
-                alpha[s][t] += (alpha[s-2][t-1] + alpha[s-1][t-1] + alpha[s][t-1]) * cur_y
+                alpha[s][t] = (alpha[s-2][t-1] + alpha[s-1][t-1] + alpha[s][t-1]) * cur_y
 
     # Return the probability of the label
-    p = alpha[2*L-1][T-1] + alpha[2*L][T-1]
+    p = alpha[L-1][T-1] + alpha[L][T-1]
     return p
 
 
@@ -40,7 +40,18 @@ def print_p(p: float):
     print("%.3f" % p)
 
 
-if __name__ == "__main__":
+def create_test():
+    y = np.array([
+        [0.1, 0.2, 0.3, 0.4],  # Time step 1
+        [0.2, 0.1, 0.4, 0.3],  # Time step 2
+        [0.3, 0.4, 0.1, 0.2],  # Time step 3
+        [0.4, 0.3, 0.2, 0.1],  # Time step 4
+    ])
+
+    np.save('test_mat.npy', y)
+
+
+def main():
     # Load the network outputs from the provided numpy file
     y_path = sys.argv[1]
     y = np.load(y_path)  # shape: (T, K), T=time steps, K=number of tokens
@@ -54,3 +65,8 @@ if __name__ == "__main__":
 
     # Print the result
     print_p(p)
+
+
+if __name__ == "__main__":
+    # create_test()
+    main()
