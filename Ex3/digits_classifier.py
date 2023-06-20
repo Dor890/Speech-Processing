@@ -7,7 +7,6 @@ import numpy as np
 from abc import abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from word2number import w2n
 from torch.nn.functional import pairwise_distance
 
 TRAIN_PATH = "./train_files"
@@ -39,7 +38,7 @@ class ClassifierArgs:
 
     @staticmethod
     def load_train(path: str) -> tp.Tuple[torch.Tensor, torch.Tensor]:
-        digit_directories = ["one", "two", "three", "four", "five"]
+        digit_directories = {'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5}
         audio_data, labels = [], []
         mfcc_transform = torchaudio.transforms.MFCC(n_mfcc=N_MFCC)
 
@@ -52,7 +51,7 @@ class ClassifierArgs:
                 waveform, sample_rate = torchaudio.load(file_path)
                 mfcc = mfcc_transform(waveform)
                 audio_data.append(mfcc)
-                labels.append(w2n.word_to_num(digit_dir))
+                labels.append(digit_directories[digit_dir])
 
         x_train = torch.stack(audio_data)
         y_train = torch.tensor(labels)
@@ -229,5 +228,5 @@ def evaluate_model(model):
 if __name__ == '__main__':
     print(f"Start training on all data at {datetime.now()}")
     model = ClassifierHandler.get_pretrained_model()
-    evaluate_model(model)
+    # evaluate_model(model)
     print(f"Done training. Stop time:{datetime.now()}")

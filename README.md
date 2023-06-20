@@ -20,7 +20,9 @@ In Exercise 3, We delved into digit audio classification. This exercise specific
 
 
 ## Exercise 4
-Exercise 4 is currently in progress and will be uploaded soon. Stay tuned for the latest updates!
+In this exercise we implement the CTC loss in Python, which calculates the probability of a specific labeling given the model’s output distribution over phonemes. We assume to be given with a sequence of phonemes p and the network’s output y. In words, y is a matrix with the shape of T × K where T is the number of time steps, and K is the amount of phonemes, where each column i of y is a distribution over K phonemes at time i. Our goal is to implement the CTC function to calculate P(p|x) using the following equations:
+
+![image](https://github.com/Dor890/Speech-Processing/assets/64433958/e1bfab5b-637d-49c6-8698-642774d01d36)
 
 
 ## Final Project
