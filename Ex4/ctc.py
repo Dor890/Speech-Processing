@@ -6,7 +6,9 @@ BLANK = 'ϵ'
 
 def ctc(y, label, tokens):
     T, K = y.shape
-    L = len(label)
+    L, M = len(label), len(tokens)
+    if T < L or K < M:
+        return 0  # y shape is not valid
     blank_index = tokens.index(BLANK) if BLANK in tokens else -1
     # Initialize z
     z = [BLANK]
@@ -24,7 +26,7 @@ def ctc(y, label, tokens):
         alpha[0][t] = alpha[0][t-1] * y[t][blank_index]
         alpha[1][t] = (alpha[0][t-1] + alpha[1][t-1]) * y[t][tokens.index(label[0])]
         for s in range(2, len(z)):  # len(z) = 2L + 1
-            zs_idx = tokens.index(z[s]) if z[s] in tokens else -1
+            zs_idx = tokens.index(z[s]) if z[s] in tokens else blank_index
             cur_y = y[t][zs_idx]
             if z[s] == BLANK or z[s] == z[s-2]:
                 alpha[s][t] = (alpha[s-1][t-1] + alpha[s][t-1]) * cur_y
@@ -32,7 +34,7 @@ def ctc(y, label, tokens):
                 alpha[s][t] = (alpha[s-2][t-1] + alpha[s-1][t-1] + alpha[s][t-1]) * cur_y
 
     # Return the probability of the label
-    p = alpha[L-1][T-1] + alpha[L][T-1]
+    p = alpha[2*L-1][-1] + alpha[2*L-1][-2]  # Last two cells in the last column
     return p
 
 
@@ -46,6 +48,7 @@ def create_test():
         [0.2, 0.1, 0.4, 0.3],  # Time step 2
         [0.3, 0.4, 0.1, 0.2],  # Time step 3
         [0.4, 0.3, 0.2, 0.1],  # Time step 4
+        [0.1, 0.2, 0.3, 0.4],  # Time step 5
     ])
 
     np.save('test_mat.npy', y)
