@@ -5,7 +5,6 @@ from enum import Enum
 import typing as tp
 from dataclasses import dataclass
 import json
-from datetime import datetime
 
 
 class Genre(Enum):
@@ -291,9 +290,6 @@ class ClassifierHandler:
                                       convert_labels_tensor(batch_labels))
                 epoch_loss += loss
 
-            print(f"Epoch {epoch + 1}: Batch Loss ="
-                  f" {epoch_loss / len(training_parameters.train_data)}")
-
         model_dict = {"weights": model.weights, "biases": model.biases}
         torch.save(model_dict, 'model_files/music_classifier.pt')
 
@@ -340,9 +336,3 @@ def train_all_data():
     train_params = TrainingParameters(all_data=True)
     ClassifierHandler.train_new_model(train_params)
 
-
-if __name__ == '__main__':
-    print(f"Start training on all data at {datetime.now()}")
-    # train_test_and_evaluate()
-    # train_all_data()
-    print(f"Done training. Stop time:{datetime.now()}")
