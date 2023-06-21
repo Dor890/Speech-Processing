@@ -5,7 +5,6 @@ from enum import Enum
 import typing as tp
 from dataclasses import dataclass
 import json
-from datetime import datetime
 
 
 class Genre(Enum):
@@ -53,7 +52,7 @@ class MusicClassifier:
     You should Implement your classifier object here
     """
 
-    def _init_(self, opt_params: OptimizationParameters, **kwargs):
+    def __init__(self, opt_params: OptimizationParameters, **kwargs):
         """
         This defines the classifier object.
         - You should define your weights and biases as class components here.
@@ -280,20 +279,16 @@ class ClassifierHandler:
         x_train, y_train = ClassifierHandler.load_train_data(training_parameters)[:2]
 
         for epoch in range(training_parameters.num_epochs):
-            epoch_loss = 0.0
             for i in range(len(x_train)):  # Batch
                 batch_wavs, batch_labels = x_train[i], y_train[i]
                 feats = model.extract_feats(batch_wavs)
                 output_scores = model.forward(feats)
-                loss = model.backward(feats, output_scores,
-                                      ClassifierHandler.convert_labels_tensor(batch_labels))
-                epoch_loss += loss
+                model.backward(feats, output_scores,
+                        ClassifierHandler.convert_labels_tensor(batch_labels))
 
-            print(f"Epoch {epoch + 1}: Batch Loss ="
-                  f" {epoch_loss / len(x_train)}")
 
         model_dict = {"weights": model.weights, "biases": model.biases}
-        torch.save(model_dict, 'model_files/music_classifier.pt')
+        torch.save(model_dict, f'model_files/music_classifier_new.pt')
 
         return model
 
@@ -323,24 +318,3 @@ class ClassifierHandler:
         saved_weights = (loaded_dict["weights"], loaded_dict["biases"])
         model.set_weights(saved_weights)
         return model
-
-
-def train_test_and_evaluate():
-    train_params = TrainingParameters()
-    ClassifierHandler.train_new_model(train_params)
-    model = ClassifierHandler.get_pretrained_model()
-    accuracy = ClassifierHandler. \
-        test_music_classifier_accuracy(model, ClassifierHandler.load_train_data(train_params)[2:])
-    print("Accuracy:", accuracy)
-
-
-def train_all_data():
-    train_params = TrainingParameters()
-    ClassifierHandler.train_new_model(train_params)
-
-
-if __name__ == '__main__':
-    print(f"Start training on all data at {datetime.now()}")
-    train_test_and_evaluate()
-    # train_all_data()
-    print(f"Done training. Stop time:{datetime.now()}")
