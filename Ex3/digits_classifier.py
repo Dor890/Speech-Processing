@@ -11,8 +11,6 @@ from torch.nn.functional import pairwise_distance
 TRAIN_PATH = "./train_files"
 TEST_PATH = "./test_files"
 OUTPUT_PATH = "output.txt"
-CLASSIFIER_PATH = "digit_classifier.pt"
-
 N_MFCC = 20
 
 
@@ -37,7 +35,8 @@ class DigitClassifier:
     """
 
     def __init__(self, args: ClassifierArgs):
-        self.x_train, self.y_train = self.load_train(args.path_to_training_data_dir)
+        self.x_train, self.y_train = \
+            self.load_train(args.path_to_training_data_dir)
 
     @staticmethod
     def load_train(path: str) -> tp.Tuple[torch.Tensor, torch.Tensor]:
@@ -177,9 +176,6 @@ class DigitClassifier:
         dtw_predictions = self.classify_using_DTW_distance(waves)
 
         for i in range(len(audio_files)):
-            if euc_predictions[i] != dtw_predictions[i]:
-                print(f"diff at {i}, {audio_files[i]}")
-
             file_name = audio_files[i].split("\\")[1]
             predictions.append(f"{file_name} - {euc_predictions[i]} "
                                f"- {dtw_predictions[i]}")
@@ -218,7 +214,3 @@ def evaluate_model(model):
     with open(OUTPUT_PATH, "w") as file:
         file.writelines(line + '\n' for line in predictions)
 
-
-if __name__ == '__main__':
-    model = ClassifierHandler.get_pretrained_model()
-    evaluate_model(model)
