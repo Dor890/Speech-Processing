@@ -43,7 +43,6 @@ class DigitClassifier:
 
         else:
             # use saved data.
-            print("load from files")
             self.x_train = torch.load("train_x.pth")
             self.y_train = torch.load("train_y.pth")
 
