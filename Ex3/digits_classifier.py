@@ -21,7 +21,7 @@ class ClassifierArgs:
     # We will use this to give an absolute path to the data, make sure you
     # read the data using this argument.
     # You may assume the train data is the same
-    path_to_training_data_dir: str = "blabla"
+    path_to_training_data_dir: str = "./train_files"
     path_to_test_data_dir: str = "./test_files"
     output_path: str = "output.txt"
     num_mfccs: int = 20
@@ -37,14 +37,9 @@ class DigitClassifier:
 
         if os.path.exists(self.args.path_to_training_data_dir)\
                 and os.path.isdir(self.args.path_to_training_data_dir):
-            # validate train folder exists and it's a dir and use it
+            # sanity check to avoid exception when args not valid
             self.x_train, self.y_train = self.load_train(
                 self.args.path_to_training_data_dir)
-
-        else:
-            # use saved data.
-            self.x_train = torch.load("train_x.pth")
-            self.y_train = torch.load("train_y.pth")
 
 
     def load_train(self, path: str) -> tp.Tuple[torch.Tensor, torch.Tensor]:
