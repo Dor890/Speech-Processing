@@ -6,7 +6,6 @@ import numpy as np
 
 from abc import abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
 from torch.nn.functional import pairwise_distance
 
 TRAIN_PATH = "./train_files"
@@ -15,6 +14,7 @@ OUTPUT_PATH = "output.txt"
 CLASSIFIER_PATH = "digit_classifier.pt"
 
 N_MFCC = 20
+
 
 @dataclass
 class ClassifierArgs:
@@ -29,12 +29,15 @@ class ClassifierArgs:
     # read the data using this argument.
     # You may assume the train data is the same
     path_to_training_data_dir: str = TRAIN_PATH
-    path_to_testing_data_dir: str = TEST_PATH
 
-    # You may add other args here
-    def __init__(self):
-        x_train, y_train = self.load_train(self.path_to_training_data_dir)
-        self.train_data = (x_train, y_train)
+
+class DigitClassifier:
+    """
+    You should Implement your classifier object here
+    """
+
+    def __init__(self, args: ClassifierArgs):
+        self.x_train, self.y_train = self.load_train(args.path_to_training_data_dir)
 
     @staticmethod
     def load_train(path: str) -> tp.Tuple[torch.Tensor, torch.Tensor]:
@@ -81,15 +84,6 @@ class ClassifierArgs:
 
         return torch.stack(audio_data)
 
-
-class DigitClassifier:
-    """
-    You should Implement your classifier object here
-    """
-
-    def __init__(self, args: ClassifierArgs):
-        self.x_train, self.y_train = args.train_data
-
     @abstractmethod
     def classify_using_eucledian_distance(self, audio_files: tp.Union[
         tp.List[str], torch.Tensor]) -> tp.List[int]:
@@ -103,13 +97,13 @@ class DigitClassifier:
         predictions = []
 
         if isinstance(audio_files, list):
-            audio_files = ClassifierArgs.load_test_from_list(audio_files)
+            audio_files = DigitClassifier.load_test_from_list(audio_files)
 
         for wave in audio_files:
             mfcc = mfcc_transform(wave)
             best_dist, best_label = float('inf'), None
             for i, x in enumerate(self.x_train):
-                cur_dist = torch.sum(pairwise_distance(mfcc, x, p=2))
+                cur_dist = np.linalg.norm(torch.flatten(mfcc.squeeze(0)).numpy() - torch.flatten(x).numpy())
                 if cur_dist < best_dist:
                     best_dist, best_label = cur_dist, self.y_train[i]
             predictions.append(best_label)
@@ -129,7 +123,7 @@ class DigitClassifier:
         predictions = []
 
         if isinstance(audio_files, list):
-            audio_files = ClassifierArgs.load_test_from_list(audio_files)
+            audio_files = DigitClassifier.load_test_from_list(audio_files)
 
         for wave in audio_files:
             dtw_mat = []
@@ -226,7 +220,5 @@ def evaluate_model(model):
 
 
 if __name__ == '__main__':
-    print(f"Start training on all data at {datetime.now()}")
     model = ClassifierHandler.get_pretrained_model()
-    # evaluate_model(model)
-    print(f"Done training. Stop time:{datetime.now()}")
+    evaluate_model(model)
