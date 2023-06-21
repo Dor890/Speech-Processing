@@ -5,6 +5,7 @@ from enum import Enum
 import typing as tp
 from dataclasses import dataclass
 import json
+from datetime import datetime
 
 
 class Genre(Enum):
@@ -23,70 +24,13 @@ class TrainingParameters:
     This dataclass defines a training configuration.
     feel free to add/change it as you see fit, do NOT remove the following fields as we will use
     them in test time.
-    If you add additional values to your training configuration please add them in here with 
+    If you add additional values to your training configuration please add them in here with
     default values (so run won't break when we test this).
     """
     batch_size: int = 32
     num_epochs: int = 100
     train_json_path: str = "jsons/train.json"
     test_json_path: str = "jsons/test.json"
-
-    def __init__(self, batch_size=32, num_epochs=100, all_data=False):
-        self.batch_size, num_epochs = batch_size, num_epochs
-        x_train, y_train = self.load_json(self.train_json_path)
-        x_test, y_test = self.load_json(self.test_json_path)
-
-        if all_data: 
-            # Train on all the data provided
-            waves = torch.cat((x_train, x_test))
-            all_test = torch.cat((y_train, y_test))
-            indices = torch.randperm(waves.size()[0])
-            waves = waves[indices]
-            all_test = all_test[indices]
-
-            waves, all_test = torch.split(waves, self.batch_size), \
-                torch.split(all_test, self.batch_size)  # 32 Batches
-
-            self.train_data = waves, all_test
-
-        else:
-            # Split for model evaluation
-            indices = torch.randperm(x_train.size()[0])
-            x_train, y_train = x_train[indices], y_train[indices]
-            x_train, y_train = torch.split(x_train, self.batch_size), \
-                torch.split(y_train, self.batch_size)  # 32 Batches
-
-            indices = torch.randperm(x_test.size()[0])
-            x_test, y_test = x_test[indices], y_test[indices]
-
-            self.train_data = (x_train, y_train)
-            self.test_data = (x_test, y_test)
-
-    @staticmethod
-    def load_json(path):
-        mp3_arr, labels_arr = [], []
-        with open(path, 'r') as f:
-            data = json.load(f)
-        for item in data:
-            mp3_path = item['path']
-            waveform, sr = torchaudio.load(mp3_path, format='mp3')
-            mp3_arr.append(waveform.squeeze())
-            TrainingParameters.parse_label(item, labels_arr)
-        mp3_tensor = torch.stack(mp3_arr)
-        labels_tensor = torch.tensor(labels_arr)
-        return mp3_tensor, labels_tensor
-
-    @staticmethod
-    def parse_label(item, labels_arr):
-        label = item['label']
-        if label == 'classical':
-            labels_arr.append(Genre.CLASSICAL.value)
-        elif label == 'heavy-rock':
-            labels_arr.append(Genre.HEAVY_ROCK.value)
-        elif label == 'reggae':
-            labels_arr.append(Genre.REGGAE.value)
-        else:
-            raise RuntimeError("Unrecognized Label")
 
 
 @dataclass
@@ -104,19 +48,12 @@ class OptimizationParameters:
     n_mels: int = 128
 
 
-def convert_labels_tensor(labels):
-    labels = labels.reshape((len(labels), 1))
-    new_labels = torch.zeros((len(labels), 3))
-    new_labels.scatter_(1, labels, 1)
-    return new_labels
-
-
 class MusicClassifier:
     """
     You should Implement your classifier object here
     """
 
-    def __init__(self, opt_params: OptimizationParameters, **kwargs):
+    def _init_(self, opt_params: OptimizationParameters, **kwargs):
         """
         This defines the classifier object.
         - You should define your weights and biases as class components here.
@@ -144,11 +81,11 @@ class MusicClassifier:
             zrc = self.extract_zrc(wav_numpy)
             rms = self.extract_rms(wav_numpy)
             spec_cons = self.extract_spectral_contrast(wav_numpy)
-            
+
             # Stack features by row
             feature = torch.hstack(
                 (mel_Spec, sc, mfcc, zrc, rms, spec_cons)).flatten()
-            
+
             # Concat to matrix
             feats = torch.cat((feats, feature))
         return feats.reshape(len(wavs), -1)
@@ -224,7 +161,7 @@ class MusicClassifier:
         - update gradients using SGD
 
         Note: in practice - the optimization process is usually external to the model.
-        We thought it may result in less coding needed if you are to apply it here, hence 
+        We thought it may result in less coding needed if you are to apply it here, hence
         OptimizationParameters are passed to the initialization function
         """
         # Calculate loss
@@ -244,7 +181,7 @@ class MusicClassifier:
 
     def get_weights_and_biases(self):
         """
-        This function returns the weights and biases associated with this model object, 
+        This function returns the weights and biases associated with this model object,
         should return a tuple: (weights, biases)
         """
         return self.weights, self.biases
@@ -268,6 +205,68 @@ class MusicClassifier:
 
 
 class ClassifierHandler:
+    @staticmethod
+    def load_train_data(training_parameters, all_data=False):
+        x_train, y_train = ClassifierHandler.load_json(training_parameters.train_json_path)
+        x_test, y_test = ClassifierHandler.load_json(training_parameters.test_json_path)
+
+        if all_data:
+            # Train on all the data provided
+            waves = torch.cat((x_train, x_test))
+            all_test = torch.cat((y_train, y_test))
+            indices = torch.randperm(waves.size()[0])
+            waves = waves[indices]
+            all_test = all_test[indices]
+
+            waves, all_test = torch.split(waves, training_parameters.batch_size), \
+                              torch.split(all_test, training_parameters.batch_size)  # 32 Batches
+
+            return waves, all_test
+
+        else:
+            # Split for model evaluation
+            indices = torch.randperm(x_train.size()[0])
+            x_train, y_train = x_train[indices], y_train[indices]
+            x_train, y_train = torch.split(x_train, training_parameters.batch_size), \
+                               torch.split(y_train, training_parameters.batch_size)  # 32 Batches
+
+            indices = torch.randperm(x_test.size()[0])
+            x_test, y_test = x_test[indices], y_test[indices]
+
+            return x_train, y_train, x_test, y_test
+
+    @staticmethod
+    def load_json(path):
+        mp3_arr, labels_arr = [], []
+        with open(path, 'r') as f:
+            data = json.load(f)
+        for item in data:
+            mp3_path = item['path']
+            waveform, sr = torchaudio.load(mp3_path, format='mp3')
+            mp3_arr.append(waveform.squeeze())
+            ClassifierHandler.parse_label(item, labels_arr)
+        mp3_tensor = torch.stack(mp3_arr)
+        labels_tensor = torch.tensor(labels_arr)
+        return mp3_tensor, labels_tensor
+
+    @staticmethod
+    def parse_label(item, labels_arr):
+        label = item['label']
+        if label == 'classical':
+            labels_arr.append(Genre.CLASSICAL.value)
+        elif label == 'heavy-rock':
+            labels_arr.append(Genre.HEAVY_ROCK.value)
+        elif label == 'reggae':
+            labels_arr.append(Genre.REGGAE.value)
+        else:
+            raise RuntimeError("Unrecognized Label")
+
+    @staticmethod
+    def convert_labels_tensor(labels):
+        labels = labels.reshape((len(labels), 1))
+        new_labels = torch.zeros((len(labels), 3))
+        new_labels.scatter_(1, labels, 1)
+        return new_labels
 
     @staticmethod
     def train_new_model(
@@ -278,7 +277,7 @@ class ClassifierHandler:
         You could program your training loop / training manager as you see fit.
         """
         model = MusicClassifier(OptimizationParameters())
-        x_train, y_train = training_parameters.train_data
+        x_train, y_train = ClassifierHandler.load_train_data(training_parameters)[:2]
 
         for epoch in range(training_parameters.num_epochs):
             epoch_loss = 0.0
@@ -287,8 +286,11 @@ class ClassifierHandler:
                 feats = model.extract_feats(batch_wavs)
                 output_scores = model.forward(feats)
                 loss = model.backward(feats, output_scores,
-                                      convert_labels_tensor(batch_labels))
+                                      ClassifierHandler.convert_labels_tensor(batch_labels))
                 epoch_loss += loss
+
+            print(f"Epoch {epoch + 1}: Batch Loss ="
+                  f" {epoch_loss / len(x_train)}")
 
         model_dict = {"weights": model.weights, "biases": model.biases}
         torch.save(model_dict, 'model_files/music_classifier.pt')
@@ -328,11 +330,17 @@ def train_test_and_evaluate():
     ClassifierHandler.train_new_model(train_params)
     model = ClassifierHandler.get_pretrained_model()
     accuracy = ClassifierHandler. \
-        test_music_classifier_accuracy(model, train_params.test_data)
+        test_music_classifier_accuracy(model, ClassifierHandler.load_train_data(train_params)[2:])
     print("Accuracy:", accuracy)
 
 
 def train_all_data():
-    train_params = TrainingParameters(all_data=True)
+    train_params = TrainingParameters()
     ClassifierHandler.train_new_model(train_params)
 
+
+if __name__ == '__main__':
+    print(f"Start training on all data at {datetime.now()}")
+    train_test_and_evaluate()
+    # train_all_data()
+    print(f"Done training. Stop time:{datetime.now()}")
