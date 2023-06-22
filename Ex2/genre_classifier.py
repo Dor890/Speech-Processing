@@ -1,3 +1,4 @@
+import librosa
 import torch
 import torchaudio
 import librosa.feature as lib
@@ -41,7 +42,7 @@ class OptimizationParameters:
     learning_rate: float = 0.05
     num_classes: int = 3
     input_dim: int = 76960
-    sr: int = 16000
+    sr: int = 22050
     n_fft: int = 1024
     hop_len: int = 512
     n_mels: int = 128
@@ -84,6 +85,15 @@ class MusicClassifier:
             # Stack features by row
             feature = torch.hstack(
                 (mel_Spec, sc, mfcc, zrc, rms, spec_cons)).flatten()
+
+            # make sure inp
+            if feature.shape[0] < self.opt_params.input_dim:
+                pad_length = self.opt_params.input_dim - feature.shape[0]
+                feature = torch.nn.functional.pad(feature, (0, pad_length),
+                                                       value=0)
+
+            elif feature.shape[0] > self.opt_params.input_dim:
+                feature = feature[:self.opt_params.input_dim]
 
             # Concat to matrix
             feats = torch.cat((feats, feature))
@@ -192,7 +202,7 @@ class MusicClassifier:
         """
         feats = self.extract_feats(wavs)
         logits = self.forward(feats)
-        preds = torch.argmax(logits, dim=1)
+        preds = torch.argmax(logits, dim=1).unsqueeze(1)
         return preds
 
     def set_weights(self, saved_weights):
@@ -204,6 +214,7 @@ class MusicClassifier:
 
 
 class ClassifierHandler:
+    # --- data loading pipeline ---
     @staticmethod
     def load_train_data(training_parameters, all_data=False):
         x_train, y_train = ClassifierHandler.load_json(training_parameters.train_json_path)
@@ -241,9 +252,15 @@ class ClassifierHandler:
             data = json.load(f)
         for item in data:
             mp3_path = item['path']
-            waveform, sr = torchaudio.load(mp3_path, format='mp3')
+
+            # load and convert to torch
+            waveform, sr = librosa.load(mp3_path,
+                                        sr=OptimizationParameters.sr)
+            waveform = torch.from_numpy(waveform)
+
             mp3_arr.append(waveform.squeeze())
             ClassifierHandler.parse_label(item, labels_arr)
+
         mp3_tensor = torch.stack(mp3_arr)
         labels_tensor = torch.tensor(labels_arr)
         return mp3_tensor, labels_tensor
@@ -267,6 +284,8 @@ class ClassifierHandler:
         new_labels.scatter_(1, labels, 1)
         return new_labels
 
+    # --- end of pipe ---
+
     @staticmethod
     def train_new_model(
             training_parameters: TrainingParameters) -> MusicClassifier:
@@ -288,24 +307,9 @@ class ClassifierHandler:
 
 
         model_dict = {"weights": model.weights, "biases": model.biases}
-        torch.save(model_dict, f'model_files/music_classifier_new.pt')
+        torch.save(model_dict, 'model_files/music_classifier_new.pt')
 
         return model
-
-    @staticmethod
-    def test_music_classifier_accuracy(classifier: MusicClassifier,
-                                       data: tp.Tuple) -> float:
-        """
-        This function should evaluate the accuracy of a trained
-        'MusicClassifier' object on given data.
-        It should return the accuracy as a float value between 0 and 1.
-        """
-        feats, labels = data
-        preds = classifier.classify(feats)
-        correct_preds = (preds == labels).sum().item()
-        total_preds = len(labels)
-        accuracy = correct_preds / total_preds
-        return accuracy
 
     @staticmethod
     def get_pretrained_model() -> MusicClassifier:
@@ -318,3 +322,23 @@ class ClassifierHandler:
         saved_weights = (loaded_dict["weights"], loaded_dict["biases"])
         model.set_weights(saved_weights)
         return model
+
+    @staticmethod
+    def test_music_classifier_accuracy(classifier: MusicClassifier,
+                                       data: tp.Tuple) -> float:
+        """
+        This function should evaluate the accuracy of a trained
+        'MusicClassifier' object on given data.
+        It should return the accuracy as a float value between 0 and 1.
+        """
+        feats, labels = data
+        preds = classifier.classify(feats)
+
+        # normalize labels to match classify api
+        if len(labels.shape) == 1:
+            labels = labels.unsqueeze(1)
+
+        correct_preds = (preds == labels).sum().item()
+        total_preds = len(labels)
+        accuracy = correct_preds / total_preds
+        return accuracy

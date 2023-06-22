@@ -180,7 +180,7 @@ class DigitClassifier:
         dtw_predictions = self.classify_using_DTW_distance(waves)
 
         for i in range(len(audio_files)):
-            file_name = audio_files[i].split("\\")[1]
+            file_name = os.path.basename(audio_files[i])
             predictions.append(f"{file_name} - {euc_predictions[i]} "
                                f"- {dtw_predictions[i]}")
 
