@@ -36,7 +36,7 @@ def ctc(y, label, tokens):
                 alpha[s][t] = (alpha[s-2][t-1] + alpha[s-1][t-1] + alpha[s][t-1]) * cur_y
 
     # Return the probability of the label
-    p = prob_from_alpha  # Last two cells in the last column
+    p = prob_from_alpha(alpha)  # Last two cells in the last column
     return p
 
 
