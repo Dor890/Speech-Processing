@@ -11,6 +11,7 @@ def ctc(y, label, tokens):
     if T < L or K != M+1:
         return 0  # y shape is not valid
 
+
     # Initialize z
     z = [BLANK]
     for i in range(L):
@@ -20,15 +21,15 @@ def ctc(y, label, tokens):
     # Initialize alpha
     alpha = np.zeros((len(z), T))
     alpha[0][0] = y[0][BLACK_INDEX]  # Probability of blank to be first token
-    alpha[1][0] = y[0][tokens.index(label[0])]  # Probability of first label to be first token
+    alpha[1][0] = y[0][tokens.index(label[0])+1]  # Probability of first label to be first token
     # alpha[s][0] = 0 for every s > 2
 
     # Dynamic programming for calculating all alpha matrix
     for t in range(1, T):
         alpha[0][t] = alpha[0][t-1] * y[t][BLACK_INDEX]
-        alpha[1][t] = (alpha[0][t-1] + alpha[1][t-1]) * y[t][tokens.index(label[0])]
+        alpha[1][t] = (alpha[0][t-1] + alpha[1][t-1]) * y[t][tokens.index(label[0])+1]
         for s in range(2, len(z)):  # len(z) = 2L + 1
-            zs_idx = tokens.index(z[s]) if z[s] in tokens else BLACK_INDEX
+            zs_idx = tokens.index(z[s])+1 if z[s] in tokens else BLACK_INDEX
             cur_y = y[t][zs_idx]
             if z[s] == BLANK or z[s] == z[s-2]:
                 alpha[s][t] = (alpha[s-1][t-1] + alpha[s][t-1]) * cur_y
@@ -36,8 +37,7 @@ def ctc(y, label, tokens):
                 alpha[s][t] = (alpha[s-2][t-1] + alpha[s-1][t-1] + alpha[s][t-1]) * cur_y
 
     # Return the probability of the label
-    p = prob_from_alpha(alpha)  # Last two cells in the last column
-    return p
+    return alpha
 
 
 def prob_from_alpha(alpha):
@@ -73,7 +73,8 @@ def main():
         return
 
     # Calculate the probability P(p|x)
-    p = ctc(y, label, tokens)
+    alpha = ctc(y, label, tokens)
+    p = prob_from_alpha(alpha)  # Last two cells in the last column
 
     # Print the result
     print_p(p)
