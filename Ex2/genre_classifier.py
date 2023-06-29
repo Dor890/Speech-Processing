@@ -28,7 +28,7 @@ class TrainingParameters:
     default values (so run won't break when we test this).
     """
     batch_size: int = 32
-    num_epochs: int = 100
+    num_epochs: int = 1
     train_json_path: str = "jsons/train.json"
     test_json_path: str = "jsons/test.json"
 
@@ -90,7 +90,7 @@ class MusicClassifier:
             if feature.shape[0] < self.opt_params.input_dim:
                 pad_length = self.opt_params.input_dim - feature.shape[0]
                 feature = torch.nn.functional.pad(feature, (0, pad_length),
-                                                       value=0)
+                                                  value=0)
 
             elif feature.shape[0] > self.opt_params.input_dim:
                 feature = feature[:self.opt_params.input_dim]
@@ -217,8 +217,10 @@ class ClassifierHandler:
     # --- data loading pipeline ---
     @staticmethod
     def load_train_data(training_parameters, all_data=False):
-        x_train, y_train = ClassifierHandler.load_json(training_parameters.train_json_path)
-        x_test, y_test = ClassifierHandler.load_json(training_parameters.test_json_path)
+        x_train, y_train = ClassifierHandler.load_json(
+            training_parameters.train_json_path)
+        x_test, y_test = ClassifierHandler.load_json(
+            training_parameters.test_json_path)
 
         if all_data:
             # Train on all the data provided
@@ -228,8 +230,10 @@ class ClassifierHandler:
             waves = waves[indices]
             all_test = all_test[indices]
 
-            waves, all_test = torch.split(waves, training_parameters.batch_size), \
-                              torch.split(all_test, training_parameters.batch_size)  # 32 Batches
+            waves, all_test = torch.split(waves,
+                                          training_parameters.batch_size), \
+                              torch.split(all_test,
+                                          training_parameters.batch_size)  # 32 Batches
 
             return waves, all_test
 
@@ -237,8 +241,10 @@ class ClassifierHandler:
             # Split for model evaluation
             indices = torch.randperm(x_train.size()[0])
             x_train, y_train = x_train[indices], y_train[indices]
-            x_train, y_train = torch.split(x_train, training_parameters.batch_size), \
-                               torch.split(y_train, training_parameters.batch_size)  # 32 Batches
+            x_train, y_train = torch.split(x_train,
+                                           training_parameters.batch_size), \
+                               torch.split(y_train,
+                                           training_parameters.batch_size)  # 32 Batches
 
             indices = torch.randperm(x_test.size()[0])
             x_test, y_test = x_test[indices], y_test[indices]
@@ -295,7 +301,8 @@ class ClassifierHandler:
         You could program your training loop / training manager as you see fit.
         """
         model = MusicClassifier(OptimizationParameters())
-        x_train, y_train = ClassifierHandler.load_train_data(training_parameters)[:2]
+        x_train, y_train = ClassifierHandler.load_train_data(
+            training_parameters)[:2]
 
         for epoch in range(training_parameters.num_epochs):
             for i in range(len(x_train)):  # Batch
@@ -303,11 +310,13 @@ class ClassifierHandler:
                 feats = model.extract_feats(batch_wavs)
                 output_scores = model.forward(feats)
                 model.backward(feats, output_scores,
-                        ClassifierHandler.convert_labels_tensor(batch_labels))
+                               ClassifierHandler.convert_labels_tensor(
+                                   batch_labels))
 
-
-        model_dict = {"weights": model.weights, "biases": model.biases}
-        torch.save(model_dict, 'model_files/music_classifier_new.pt')
+        torch.save(model.weights,
+                   'model_files/music_classifier_new_weights.pt')
+        torch.save(model.biases,
+                   'model_files/music_classifier_new_biases.pt')
 
         return model
 
@@ -318,9 +327,9 @@ class ClassifierHandler:
          trained weights / hyperparameters and return the loaded model.
         """
         model = MusicClassifier(OptimizationParameters())
-        loaded_dict = torch.load("model_files/music_classifier.pt")
-        saved_weights = (loaded_dict["weights"], loaded_dict["biases"])
-        model.set_weights(saved_weights)
+        a = torch.load("model_files/trained_weights.pt")
+        b = torch.load("model_files/trained_biases.pt")
+        model.set_weights((a, b))
         return model
 
     @staticmethod
@@ -342,3 +351,18 @@ class ClassifierHandler:
         total_preds = len(labels)
         accuracy = correct_preds / total_preds
         return accuracy
+
+
+def main():
+    train_params = TrainingParameters()
+    # ClassifierHandler.train_new_model(train_params)
+    model = ClassifierHandler.get_pretrained_model()
+    accuracy = ClassifierHandler. \
+        test_music_classifier_accuracy(model,
+                                       ClassifierHandler.load_train_data(
+                                           train_params)[2:])
+    print(accuracy)
+
+
+if __name__ == '__main__':
+    main()
