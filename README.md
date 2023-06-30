@@ -33,8 +33,10 @@ Where the final probability is given by the following:
 ## Final Project
 For the final project we builded a full Automatic Speech Recognition (ASR) pipeline, when we used here everything we have learned in the
 course including: Dynamic Time Warping (DTW), Hidden Markov Models (HMMs), DNN-HMM, End-to-End models: CTC, ASG, RNN Transducers, LAS, etc., Language modeling, Different acoustic feature, Ensemble methods, Different search methods e.t.c. 
+
 Throughout our project we documented evaluated, analyzed, and document the performance of each of the tested configurations, that way we make smarter decisions when picking the final model, which is considered as a full-blown research project (on a small scale).
-We used here AN4 dataset. This is a small dataset recorded and distributed by Carnegie Mellon University (CMU). It consists of recordings of people spelling out addresses, names, etc. Moreover, we evaluate out model using Word Error Rate (WER) and Character Error Rate (CER)
+
+We used here AN4 dataset. This is a small dataset recorded and distributed by Carnegie Mellon University (CMU). It consists of recordings of people spelling out addresses, names, etc. Moreover, we evaluate out model using Word Error Rate (WER) and Character Error Rate (CER).
 
 The structure of the model is as folowing:
 ![image](https://github.com/Dor890/Speech-Processing/assets/64433958/788a3f41-b831-4d53-9ea0-928642dc47f0)
