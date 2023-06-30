@@ -24,7 +24,7 @@ In this exercise we implement the CTC loss in Python, which calculates the proba
 
 ![image](https://github.com/Dor890/Speech-Processing/assets/64433958/e1bfab5b-637d-49c6-8698-642774d01d36)
 
-Where the final probability is given by the following:
+Where the final probability is given by implementing the following dynamic programming matrix:
 
 ![image](https://github.com/Dor890/Speech-Processing/assets/64433958/6cdf7af0-005c-4d75-b016-9d85b57a87bf)
 
@@ -38,7 +38,7 @@ Throughout our project we documented evaluated, analyzed, and document the perfo
 
 We used here AN4 dataset. This is a small dataset recorded and distributed by Carnegie Mellon University (CMU). It consists of recordings of people spelling out addresses, names, etc. Moreover, we evaluate out model using Word Error Rate (WER) and Character Error Rate (CER).
 
-The structure of the model is as folowing:
+The structure of the model is as follows:
 ![image](https://github.com/Dor890/Speech-Processing/assets/64433958/788a3f41-b831-4d53-9ea0-928642dc47f0)
 
 
