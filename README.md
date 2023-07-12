@@ -1,7 +1,7 @@
 # Speech Recognition and Processing
 Written by: Dor Messica, Roi Zehavi.
 
-This repository contains a collection of exercises and a final project focused on speech processing and recognition. The exercises cover a range of topics, including Fourier transforms, MFCC (Mel-frequency cepstral coefficients), Mel spectrograms, audio and music classification, DTW, DNN-HMM and more.
+This repository contains a collection of exercises and a final project focused on speech processing and recognition. The exercises cover a range of topics, including Fourier transforms, MFCC (Mel-frequency cepstral coefficients), Mel spectrograms, audio and music classification, DTW, DNN-HMM, CTC, Full ASR model and more.
 
 ## Exercise 1
 In Exercise 1, we have explored Fourier transforms, MFCC, Mel spectrograms, and basic audio handling and manipulation techniques. This exercise serves as a foundation for understanding speech processing and recognition. It covers fundamental concepts and techniques that are widely used in the field.
@@ -24,9 +24,22 @@ In this exercise we implement the CTC loss in Python, which calculates the proba
 
 ![image](https://github.com/Dor890/Speech-Processing/assets/64433958/e1bfab5b-637d-49c6-8698-642774d01d36)
 
+Where the final probability is given by implementing the following dynamic programming matrix:
+
+![image](https://github.com/Dor890/Speech-Processing/assets/64433958/6cdf7af0-005c-4d75-b016-9d85b57a87bf)
+
+
 
 ## Final Project
-The final project is still under development and will be added to the repository shortly.
+For the final project we builded a full Automatic Speech Recognition (ASR) pipeline, when we used here everything we have learned in the
+course including: Dynamic Time Warping (DTW), Hidden Markov Models (HMMs), DNN-HMM, End-to-End models: CTC, ASG, RNN Transducers, LAS, etc., Language modeling, Different acoustic feature, Ensemble methods, Different search methods e.t.c. 
+
+Throughout our project we documented evaluated, analyzed, and document the performance of each of the tested configurations, that way we make smarter decisions when picking the final model, which is considered as a full-blown research project (on a small scale).
+
+We used here AN4 dataset. This is a small dataset recorded and distributed by Carnegie Mellon University (CMU). It consists of recordings of people spelling out addresses, names, etc. Moreover, we evaluate out model using Word Error Rate (WER) and Character Error Rate (CER).
+
+The structure of the model is as follows:
+![image](https://github.com/Dor890/Speech-Processing/assets/64433958/788a3f41-b831-4d53-9ea0-928642dc47f0)
 
 
 ## Conclusion
