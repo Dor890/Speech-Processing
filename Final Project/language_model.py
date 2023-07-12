@@ -5,7 +5,7 @@ import torch.optim as optim
 from tqdm import tqdm
 
 from constants import N_EPOCHS, LANG_MODEL_PATH, BATCH_SIZE, LEARNING_RATE,\
-    HIDDEN_DIM, PAD_TOKEN, EMBED_DIM
+    HIDDEN_DIM, PAD_TOKEN, EMBED_DIM, SEQ_LEN
 from ctc_model import save_model
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -79,8 +79,11 @@ def train_sequence(model, inputs, targets, lengths, criterion, optimizer):
 
     outputs, hidden = model(inputs, hidden)
 
-    packed_outputs = nn.utils.rnn.pack_padded_sequence(outputs, lengths, batch_first=True)
-    packed_targets = nn.utils.rnn.pack_padded_sequence(targets, lengths, batch_first=True)
+    sorted_lengths, sorted_indices = torch.sort(lengths, descending=True)
+    sorted_outputs = outputs[sorted_indices]
+    packed_outputs = nn.utils.rnn.pack_padded_sequence(sorted_outputs, sorted_lengths, batch_first=True)
+    sorted_targets = targets[sorted_indices]
+    packed_targets = nn.utils.rnn.pack_padded_sequence(sorted_targets, sorted_lengths, batch_first=True)
 
     loss = criterion(packed_outputs.data, packed_targets.data)
     loss.backward()
@@ -106,12 +109,11 @@ def train_all_data(model, train_data):
             data, lengths = prepare_batch(batch_data, model.vocabulary)
             data = data.to(device)
             lengths = lengths.to(device)
-            SEQ_LEN = 1
             model.train()
 
             for j in range(0, len(data)-SEQ_LEN, SEQ_LEN):
-                inputs = torch.tensor(data[j:j+SEQ_LEN]).to(device)
-                targets = torch.tensor(data[j+1:j+SEQ_LEN+1]).view(-1).to(device)
+                inputs = torch.tensor(data[:, j:j+SEQ_LEN]).to(device)
+                targets = torch.tensor(data[:, j+1:j+SEQ_LEN+1]).to(device)
 
                 loss = train_sequence(model, inputs, targets, lengths, criterion, optimizer)
                 total_loss += loss

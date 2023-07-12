@@ -17,6 +17,7 @@ NUM_CLASSES = 28
 TIME = 641  # 513 for Mel_Spec, 641 for MFCC
 MAX_LEN = 102400
 PAD_TOKEN = 0
+SEQ_LEN = 3
 
 # Strings constants
 CTC_MODEL_PATH = 'models/ctc_model.pth'
