@@ -1,0 +1,20 @@
+# Numerical constants
+SR = 16000
+FILE_2CHECK = 13
+HOP_LEN = 160
+N_FFT = 400
+N_MELS = 23  # 128 for Mel_Spec, 23 for MFCC
+N_MFCC = 13
+N_EPOCHS = 5
+BATCH_SIZE = 32
+LEARNING_RATE = 0.001
+MOMENTUM = 0.9
+WEIGHT_DECAY = 0.0001
+NUM_LAYERS = 3
+HIDDEN_SIZE = 64
+NUM_CLASSES = 28
+TIME = 641  # 513 for Mel_Spec, 641 for MFCC
+MAX_LEN = 102400
+
+# Strings constants
+MODEL_PATH = 'models/LSTM_First.pth'
