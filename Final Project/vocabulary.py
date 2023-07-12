@@ -8,6 +8,7 @@ class Vocabulary:
     def __init__(self, transcriptions, type='unigram'):
         self.transcriptions = transcriptions
         self.translator = self.create_trans_dict()
+        self.size = len(self.translator)
         # self.generate_lexicon_file()
         # self.generate_tokens_file()
         # if type == 'unigram':

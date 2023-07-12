@@ -11,10 +11,13 @@ LEARNING_RATE = 0.001
 MOMENTUM = 0.9
 WEIGHT_DECAY = 0.0001
 NUM_LAYERS = 3
-HIDDEN_SIZE = 64
+HIDDEN_DIM = 120
+EMBED_DIM = 300
 NUM_CLASSES = 28
 TIME = 641  # 513 for Mel_Spec, 641 for MFCC
 MAX_LEN = 102400
+PAD_TOKEN = 0
 
 # Strings constants
-MODEL_PATH = 'models/LSTM_First.pth'
+CTC_MODEL_PATH = 'models/ctc_model.pth'
+LANG_MODEL_PATH = 'models/lang_model.pth'

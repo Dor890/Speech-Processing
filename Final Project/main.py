@@ -5,11 +5,12 @@ import matplotlib.pyplot as plt
 from jiwer import wer, cer
 from tqdm import tqdm
 
-import model
+import ctc_model
+import language_model
 from data import Data
 from distances import DTWModel, EuclideanModel
 from vocabulary import Vocabulary
-from constants import BATCH_SIZE, MAX_LEN, SR, MODEL_PATH
+from constants import BATCH_SIZE, MAX_LEN, SR, CTC_MODEL_PATH
 
 
 def evaluate(model, x_test, y_test):
@@ -112,20 +113,24 @@ def main():
     x_val, y_val = data.get_data('val')
     x_train, y_train = data.get_data('train')
     vocabulary = Vocabulary(transcriptions=(y_train+y_val))
-    LSTM_model = model.LSTMModel(vocabulary)
-    if os.path.exists(MODEL_PATH):
+    lang_model = language_model.LanguageModel(vocabulary)
+    print('Training the language model...')
+    language_model.train_all_data(lang_model, y_train+y_val)
+    print('Language model trained successfully')
+    ctc_lstm = ctc_model.LSTMModel(vocabulary)
+    if os.path.exists(CTC_MODEL_PATH):
         print('Loading the model...')
-        model.load_model(LSTM_model, MODEL_PATH)
+        ctc_lstm.load_model(ctc_lstm, CTC_MODEL_PATH)
         print('Model loaded successfully')
     else:  # Train the model
         print('Training the model...')
-        model.train_all_data(LSTM_model, x_train, y_train)
+        ctc_lstm.train_all_data(ctc_lstm, x_train, y_train)
     print('Model trained successfully')
 
     # Evaluate the model on the test set
     print('Evaluating the model...')
     x_test, y_test = data.get_data('test')
-    test_wer, test_cer = evaluate(LSTM_model, x_train, y_train)
+    test_wer, test_cer = evaluate(ctc_lstm, x_train, y_train)
     print(f'Test WER: {test_wer:.4f}')
     print(f'Test CER: {test_cer:.4f}')
     print('Model evaluated successfully')

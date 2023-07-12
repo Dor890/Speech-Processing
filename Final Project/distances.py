@@ -11,7 +11,7 @@ from scipy.spatial.distance import cdist
 from fastdtw import fastdtw
 
 from constants import N_MFCC, SR, HOP_LEN, N_FFT, N_MELS, MAX_LEN
-from model import extract_features
+from ctc_model import extract_features
 
 
 class DTWModel:

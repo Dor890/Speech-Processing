@@ -4,7 +4,7 @@ import torchaudio
 import matplotlib.pyplot as plt
 
 from constants import SR, FILE_2CHECK, N_MFCC
-from model import extract_features
+from ctc_model import extract_features
 
 
 class Data:

@@ -7,8 +7,8 @@ from torchaudio.models.decoder import ctc_decoder
 
 from tqdm import tqdm
 
-from constants import SR, HOP_LEN, N_FFT, N_MELS, N_MFCC, HIDDEN_SIZE, NUM_LAYERS,\
-    NUM_CLASSES, N_EPOCHS, BATCH_SIZE, WEIGHT_DECAY, LEARNING_RATE, TIME, MODEL_PATH
+from constants import SR, HOP_LEN, N_FFT, N_MELS, N_MFCC, HIDDEN_DIM, NUM_LAYERS,\
+    NUM_CLASSES, N_EPOCHS, BATCH_SIZE, WEIGHT_DECAY, LEARNING_RATE, TIME, CTC_MODEL_PATH
 from decoders import GreedyDecoder, BeamSearchDecoder
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -54,16 +54,17 @@ class LSTMModel(nn.Module):
     """
     A basic LSTM model for speech recognition.
     """
-    def __init__(self, vocabulary):
+    def __init__(self, vocabulary, lang_model=None):
         super(LSTMModel, self).__init__()
         self.vocabulary = vocabulary
+        self.lang_model = lang_model
 
         # RNN layers
-        self.rnn = nn.LSTM(input_size=N_MFCC, hidden_size=HIDDEN_SIZE,
+        self.rnn = nn.LSTM(input_size=N_MFCC, hidden_size=HIDDEN_DIM,
                            num_layers=NUM_LAYERS, batch_first=True)
 
         # Fully connected layer
-        self.fc = nn.Linear(HIDDEN_SIZE, NUM_CLASSES)
+        self.fc = nn.Linear(HIDDEN_DIM, NUM_CLASSES)
 
         # Decoders
         self.greedy_decoder = GreedyDecoder(vocabulary.translator.values())
@@ -131,16 +132,18 @@ def train_all_data(model, train_data, target_data):
     optimizer = torch.optim.Adam(model.parameters(), LEARNING_RATE,
                                  weight_decay=WEIGHT_DECAY)
     model.train()
-
+    model.to(device)
     for epoch in range(N_EPOCHS):
         total_loss = 0
         for i, batch_start in tqdm(enumerate(range(0, len(train_data), BATCH_SIZE))):
             batch = train_data[batch_start:batch_start+BATCH_SIZE]
+            batch.to(device)
             mfcc_batch = extract_features(batch)
             target_batch = target_data[batch_start:batch_start+BATCH_SIZE]
+            target_batch.to(device)
             loss = train_batch(model, optimizer, mfcc_batch, target_batch)
             total_loss += loss
 
         print(f"Epoch: {epoch+1}, Loss: {total_loss:.4f}")
 
-    save_model(model, MODEL_PATH)
+    save_model(model, CTC_MODEL_PATH)
