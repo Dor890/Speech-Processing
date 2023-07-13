@@ -16,12 +16,12 @@ class Data:
         self.x_test_paths, self.x_test, self.y_test = self.load_data('test')
 
         # Print the first example in the training set
-        print(f"First train file path: {self.x_train_paths[FILE_2CHECK]}")
-        print(f"Transcription: {self.y_train[FILE_2CHECK]}")
-        print(f"Preview first train file: {self.x_train[FILE_2CHECK]}")
-        self.plot_waveform(self.x_train[0], sample_rate=SR)
-        self.plot_mfcc(extract_features(self.x_train[FILE_2CHECK]))
-        self.plot_mel_spec(self.extract_mel_spec(self.x_train[FILE_2CHECK]))
+        # print(f"First train file path: {self.x_train_paths[FILE_2CHECK]}")
+        # print(f"Transcription: {self.y_train[FILE_2CHECK]}")
+        # print(f"Preview first train file: {self.x_train[FILE_2CHECK]}")
+        # self.plot_waveform(self.x_train[0], sample_rate=SR)
+        # self.plot_mfcc(extract_features(self.x_train[FILE_2CHECK]))
+        # self.plot_mel_spec(self.extract_mel_spec(self.x_train[FILE_2CHECK]))
         print('Data loaded successfully')
 
     def load_data(self, split):

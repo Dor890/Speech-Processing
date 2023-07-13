@@ -34,12 +34,14 @@ class BeamSearchDecoder:
                         last_token = seq[-1]
                         curr_probs[i, :, last_token] = float('-inf')
 
-                    top_probs, top_tokens = torch.topk(curr_probs[i], self.beam_width)
+                    top_probs, top_tokens = torch.topk(curr_probs[i],
+                                                       self.beam_width)
                     top_probs = top_probs + seq_prob
 
                     seq_probs_t.extend(top_probs.flatten().tolist())
 
-                topk_probs, topk_indices = torch.tensor(seq_probs_t).topk(self.beam_width)
+                topk_probs, topk_indices = torch.tensor(seq_probs_t).topk(
+                    self.beam_width)
 
                 seq_probs = []
                 new_seqs = []
@@ -75,15 +77,9 @@ class GreedyDecoder(torch.nn.Module):
         Returns:
           List[str]: The resulting transcript.
         """
+        # emission[:, :, :2] = -20
         indices = torch.argmax(emission, dim=-1)  # [batch, num_seq]
         indices = torch.unique_consecutive(indices, dim=-1)
         indices = [i for i in indices if i != self.blank]
         joined = "".join([self.labels[i] for i in indices])
         return joined
-
-
-# input_data = [...]  # Input data for prediction
-# max_length = ...  # Maximum length of the predicted sequence
-#
-# prediction = decoder.decode(input_data, max_length)
-# print(prediction)

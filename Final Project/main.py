@@ -4,7 +4,6 @@ import random
 import matplotlib.pyplot as plt
 from jiwer import wer, cer
 from tqdm import tqdm
-from torchaudio.models.decoder import download_pretrained_files
 
 import ctc_model
 import language_model
@@ -14,11 +13,11 @@ from vocabulary import Vocabulary
 from constants import BATCH_SIZE, SR, CTC_MODEL_PATH, LEARNING_RATE, N_EPOCHS
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-files = download_pretrained_files("librispeech-4-gram")
+
 
 hparams = {
-    "n_cnn_layers": 3,
-    "n_rnn_layers": 5,
+    "n_cnn_layers": 2,
+    "n_rnn_layers": 2,
     "rnn_dim": 512,
     "n_class": 28,
     "n_feats": 128,
@@ -45,16 +44,16 @@ def evaluate(model, x_test, y_test):
         #     big_tensor[i] = padded_tensor
         feats, _ = ctc_model.extract_features(batch)
         batch_preds = ctc_model.predict(model, feats)
-        for j in batch_preds:
-            pred_tokens = model.beam_decoder.idxs_to_tokens(batch_preds[j].tokens)
+        for j in range(len(batch_preds)):
+            pred_tokens = model.beam_decoder.idxs_to_tokens(batch_preds[j][0].tokens)
             if j % 50 == 0:
                 print(f'True transcription: {y_test[batch_start+j]}')
                 print(f'Predicted transcription: {pred_tokens}')
             predictions.append(pred_tokens)
             targets.append(y_test[batch_start+j])
-            plot_alignments(batch[j],
-                            model(model.extract_features(batch[j])),
-                            pred_tokens, batch_preds[j].timesteps)
+            # plot_alignments(batch[j],
+            #                 model(model.extract_features(batch[j])),
+            #                 pred_tokens, batch_preds[j].timesteps)
 
     wer_error = wer(targets, predictions)
     cer_error = cer(targets, predictions)
@@ -135,12 +134,13 @@ def main():
     print('Training the language model...')
     # language_model.train_all_data(lang_model, y_train+y_val)
     print('Language model trained successfully')
-    ctc_lstm = ctc_model.SpeechRecognitionModel(vocabulary,
-        hparams['n_cnn_layers'], hparams['n_rnn_layers'], hparams['rnn_dim'],
-        hparams['n_class'], hparams['n_feats'], hparams['stride'], hparams['dropout']
-        ).to(device)
+    # ctc_lstm = ctc_model.SpeechRecognitionModel(vocabulary,
+    #     hparams['n_cnn_layers'], hparams['n_rnn_layers'], hparams['rnn_dim'],
+    #     hparams['n_class'], hparams['n_feats'], hparams['stride'], hparams['dropout']
+    #     ).to(device)
 
-    # ctc_lstm = ctc_model.BidirectionalGRU(vocabulary)
+
+    ctc_lstm = ctc_model.LSTMModel(vocabulary)
     if os.path.exists(CTC_MODEL_PATH):
         print('Loading the model...')
         ctc_model.load_model(ctc_lstm, CTC_MODEL_PATH)

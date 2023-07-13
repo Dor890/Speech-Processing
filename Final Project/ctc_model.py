@@ -5,6 +5,7 @@ import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
 from torchaudio.models.decoder import ctc_decoder
+from torchaudio.models.decoder._ctc_decoder import download_pretrained_files
 
 from tqdm import tqdm
 
@@ -15,7 +16,7 @@ from constants import SR, HOP_LEN, N_FFT, N_MELS, N_MFCC, HIDDEN_DIM, \
 from decoders import GreedyDecoder, BeamSearchDecoder
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+files = download_pretrained_files("librispeech-4-gram")
 
 class CNNLayerNorm(nn.Module):
     """Layer normalization built for cnns input"""
@@ -111,6 +112,12 @@ class SpeechRecognitionModel(nn.Module):
             nn.Linear(rnn_dim, n_class)
         )
 
+        # Decoders
+        self.greedy_decoder = GreedyDecoder(vocabulary.translator.values())
+        self.beam_decoder = ctc_decoder(lexicon='lexicon.txt',
+                                        tokens='tokens.txt', lm=None)
+
+
     def forward(self, x):
         x = self.cnn(x.unsqueeze(1))
         x = self.rescnn_layers(x)
@@ -188,7 +195,7 @@ class LSTMModel(nn.Module):
         self.lang_model = lang_model
 
         # RNN layers
-        self.rnn = nn.LSTM(input_size=N_MFCC, hidden_size=HIDDEN_DIM,
+        self.rnn = nn.LSTM(input_size=N_MELS, hidden_size=HIDDEN_DIM,
                            num_layers=NUM_LAYERS, batch_first=True)
 
         # Fully connected layer
@@ -197,7 +204,7 @@ class LSTMModel(nn.Module):
         # Decoders
         self.greedy_decoder = GreedyDecoder(vocabulary.translator.values())
         self.beam_decoder = ctc_decoder(lexicon='lexicon.txt',
-                                        tokens='tokens.txt', lm=None)
+                                        tokens='tokens.txt', lm=files.lm)
 
     def forward(self, x):
         rnn_output, _ = self.rnn(x)
@@ -211,9 +218,9 @@ def predict(model, feats):
     Predicts a batch of waveforms using the given model.
     """
     emission = model(feats)
-    greedy_result = model.greedy_decoder(emission)
-    # beam_search_result = self.beam_decoder(emission)
-    return greedy_result
+    # greedy_result = model.gredy_decoder(emission)
+    beam_search_result = model.beam_decoder(emission)
+    return beam_search_result
 
 
 def targets_to_tensor(vocabulary, targets):
@@ -239,7 +246,7 @@ def train_batch(model, optimizer, feats_batch, target_batch, input_lengths,
     """
     Trains a single batch of the model, using the given optimizer.
     """
-    feats_batch.to(device)
+    feats_batch.to(device).detach().requires_grad_()
     target_batch, targets_lengths = targets_to_tensor(model.vocabulary,
                                                       target_batch)
     target_batch.to(device)
@@ -247,15 +254,18 @@ def train_batch(model, optimizer, feats_batch, target_batch, input_lengths,
     optimizer.zero_grad()
 
     # Forward pass
-    output = model(feats_batch).to(device)
-    output = F.log_softmax(output, dim=2).permute(1, 0, 2)
+    output = model(feats_batch).to(device).permute(1, 0, 2)
+    # output = F.log_softmax(output, dim=2)
 
+    target_batch = torch.flatten(target_batch)
+    target_batch = target_batch[target_batch != 0]
     # Calculate the loss after CTC and perform autograd
-    loss = F.ctc_loss(output, target_batch, input_lengths, targets_lengths).to(
-        device)
+    loss = F.ctc_loss(output, target_batch, input_lengths, targets_lengths,
+                      zero_infinity=True).to(device)
 
     # Backward pass and optimize
     loss.backward()
+    torch.nn.utils.clip_grad_norm(model.parameters(), 1.0)
     optimizer.step()
     # scheduler.step()
 
@@ -263,7 +273,8 @@ def train_batch(model, optimizer, feats_batch, target_batch, input_lengths,
 
 
 def train_all_data(model, train_data, target_data):
-    optimizer = torch.optim.AdamW(model.parameters(), 0.01)
+    optimizer = torch.optim.AdamW(model.parameters(), 0.003,
+                                  weight_decay=0.01)
     scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=LEARNING_RATE,
                                               steps_per_epoch=int(
                                                   len(train_data) // BATCH_SIZE - 1),
@@ -271,6 +282,7 @@ def train_all_data(model, train_data, target_data):
                                               anneal_strategy='linear')
     model.train()
     model.to(device)
+    torch.autograd.set_detect_anomaly(True)
     for epoch in range(N_EPOCHS):
         total_loss = 0
         for i, batch_start in tqdm(
