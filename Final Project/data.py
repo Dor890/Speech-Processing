@@ -3,25 +3,25 @@ import torch
 import torchaudio
 import matplotlib.pyplot as plt
 
-from constants import SR, FILE_2CHECK, N_MFCC
-from ctc_model import extract_features
+from constants import SR, FILE_2CHECK, N_MFCC, N_MELS
+from distances import extract_features
 
 
 class Data:
     def __init__(self):
         print('Loading data...')
         self.data_dir = 'an4'
-        self.sr = SR
         self.x_train_paths, self.x_train, self.y_train = self.load_data('train')
         self.x_val_paths, self.x_val, self.y_val = self.load_data('val')
         self.x_test_paths, self.x_test, self.y_test = self.load_data('test')
 
         # Print the first example in the training set
-        # print(f"First train file path: {self.x_train_paths[FILE_2CHECK]}")
-        # print(f"Transcription: {self.y_train[FILE_2CHECK]}")
-        # print(f"Preview first train file: {self.x_train[FILE_2CHECK]}")
-        # self.plot_waveform(self.x_train[0], sample_rate=self.sr)
-        # self.plot_mfcc(extract_features(self.x_train[FILE_2CHECK]))
+        print(f"First train file path: {self.x_train_paths[FILE_2CHECK]}")
+        print(f"Transcription: {self.y_train[FILE_2CHECK]}")
+        print(f"Preview first train file: {self.x_train[FILE_2CHECK]}")
+        self.plot_waveform(self.x_train[0], sample_rate=SR)
+        self.plot_mfcc(extract_features(self.x_train[FILE_2CHECK]))
+        self.plot_mel_spec(self.extract_mel_spec(self.x_train[FILE_2CHECK]))
         print('Data loaded successfully')
 
     def load_data(self, split):
@@ -81,11 +81,29 @@ class Data:
         plt.show(block=False)
 
     @staticmethod
+    def extract_mel_spec(waveform):
+        mel_specgram = torchaudio.transforms.MelSpectrogram(SR, n_mels=N_MELS)(waveform)
+        return mel_specgram
+
+    @staticmethod
     def plot_mfcc(mfcc, title="MFCC", xlim=None, ylim=None):
         fig, ax = plt.subplots()
         im = ax.imshow(mfcc, origin='lower', aspect='auto')
         fig.colorbar(im, ax=ax)
-        ax.set(title=title, xlabel='Time', ylabel='MFCC Coefficient')
+        ax.set(title=title, xlabel='Time', ylabel='MFCC')
+        if xlim:
+            ax.set_xlim(xlim)
+        if ylim:
+            ax.set_ylim(ylim)
+        plt.show(block=False)
+
+    @staticmethod
+    def plot_mel_spec(mel_spec, title="Mel Spectrogram", xlim=None, ylim=None):
+        mel_spec = mel_spec.squeeze(0).numpy()
+        fig, ax = plt.subplots()
+        im = ax.imshow(mel_spec, origin='lower', aspect='auto')
+        fig.colorbar(im, ax=ax)
+        ax.set(title=title, xlabel='Time', ylabel='Frequency (Hz)')
         if xlim:
             ax.set_xlim(xlim)
         if ylim:
