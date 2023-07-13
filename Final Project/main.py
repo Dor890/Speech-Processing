@@ -11,9 +11,23 @@ import language_model
 from data import Data
 from distances import DTWModel, EuclideanModel
 from vocabulary import Vocabulary
-from constants import BATCH_SIZE, SR, CTC_MODEL_PATH
+from constants import BATCH_SIZE, SR, CTC_MODEL_PATH, LEARNING_RATE, N_EPOCHS
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 files = download_pretrained_files("librispeech-4-gram")
+
+hparams = {
+    "n_cnn_layers": 3,
+    "n_rnn_layers": 5,
+    "rnn_dim": 512,
+    "n_class": 28,
+    "n_feats": 128,
+    "stride": 2,
+    "dropout": 0.1,
+    "learning_rate": LEARNING_RATE,
+    "batch_size": BATCH_SIZE,
+    "epochs": N_EPOCHS
+}
 
 
 def evaluate(model, x_test, y_test):
@@ -121,7 +135,11 @@ def main():
     print('Training the language model...')
     # language_model.train_all_data(lang_model, y_train+y_val)
     print('Language model trained successfully')
-    ctc_lstm = ctc_model.LSTMModel(vocabulary)
+    ctc_lstm = ctc_model.SpeechRecognitionModel(vocabulary,
+        hparams['n_cnn_layers'], hparams['n_rnn_layers'], hparams['rnn_dim'],
+        hparams['n_class'], hparams['n_feats'], hparams['stride'], hparams['dropout']
+        ).to(device)
+
     # ctc_lstm = ctc_model.BidirectionalGRU(vocabulary)
     if os.path.exists(CTC_MODEL_PATH):
         print('Loading the model...')
