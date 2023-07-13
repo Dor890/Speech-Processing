@@ -10,7 +10,7 @@ import language_model
 from data import Data
 from distances import DTWModel, EuclideanModel
 from vocabulary import Vocabulary
-from constants import BATCH_SIZE, MAX_LEN, SR, CTC_MODEL_PATH
+from constants import BATCH_SIZE, SR, CTC_MODEL_PATH
 
 
 def evaluate(model, x_test, y_test):
@@ -21,12 +21,13 @@ def evaluate(model, x_test, y_test):
 
     for i, batch_start in tqdm(enumerate(range(0, len(x_test), BATCH_SIZE))):
         batch = x_test[batch_start:batch_start+BATCH_SIZE]
-        big_tensor = torch.zeros((len(batch), 1, MAX_LEN))
-        for i, tensor in enumerate(batch):
-            padded_tensor = torch.cat(
-                [tensor, torch.zeros((1, MAX_LEN-tensor.size(1)))], dim=1)
-            big_tensor[i] = padded_tensor
-        batch_preds = model.predict(big_tensor)
+        # feats = torch.zeros((len(batch), 1, MAX_LEN))
+        # for i, tensor in enumerate(batch):
+        #     padded_tensor = torch.cat(
+        #         [tensor, torch.zeros((1, MAX_LEN-tensor.size(1)))], dim=1)
+        #     big_tensor[i] = padded_tensor
+        feats, _ = ctc_model.extract_features(batch)
+        batch_preds = ctc_model.predict(model, feats)
         for j in batch_preds:
             pred_tokens = model.beam_decoder.idxs_to_tokens(batch_preds[j].tokens)
             if j % 50 == 0:
@@ -113,18 +114,20 @@ def main():
     x_val, y_val = data.get_data('val')
     x_train, y_train = data.get_data('train')
     vocabulary = Vocabulary(transcriptions=(y_train+y_val))
-    lang_model = language_model.LanguageModel(vocabulary)
+    # lang_model = language_model.LanguageModel(vocabulary)
     print('Training the language model...')
-    language_model.train_all_data(lang_model, y_train+y_val)
+    # language_model.train_all_data(lang_model, y_train+y_val)
     print('Language model trained successfully')
-    ctc_lstm = ctc_model.LSTMModel(vocabulary)
+    # ctc_lstm = ctc_model.LSTMModel(vocabulary)
+    # ctc_lstm = ctc_model.BidirectionalGRU(vocabulary)
+    ctc_lstm = ctc_model.DeepSpeech(vocabulary)
     if os.path.exists(CTC_MODEL_PATH):
         print('Loading the model...')
-        ctc_lstm.load_model(ctc_lstm, CTC_MODEL_PATH)
+        ctc_model.load_model(ctc_lstm, CTC_MODEL_PATH)
         print('Model loaded successfully')
     else:  # Train the model
         print('Training the model...')
-        ctc_lstm.train_all_data(ctc_lstm, x_train, y_train)
+        ctc_model.train_all_data(ctc_lstm, x_train, y_train)
     print('Model trained successfully')
 
     # Evaluate the model on the test set

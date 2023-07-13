@@ -10,13 +10,25 @@ from torch.nn.functional import pairwise_distance
 from scipy.spatial.distance import cdist
 from fastdtw import fastdtw
 
-from constants import N_MFCC, SR, HOP_LEN, N_FFT, N_MELS, MAX_LEN
-from ctc_model import extract_features
+from constants import N_MFCC, SR, HOP_LEN, N_FFT, N_MELS
+MAX_LEN = 102400
+
+
+def extract_features(wavs):
+    """
+    Extract MFCC features from the given audios batch.
+    More ideas: try Time Domain / STFT / Mel Spectrogram
+    """
+    mfcc_transform = torchaudio.transforms.MFCC(
+        sample_rate=SR, n_mfcc=N_MFCC,
+        melkwargs={'hop_length': HOP_LEN, 'n_fft': N_FFT, 'n_mels': N_MELS})
+    mfcc_batch = mfcc_transform(wavs).squeeze()
+    return mfcc_batch
 
 
 class DTWModel:
     def __init__(self, x_train, y_train):
-        self.x_train = extract_features(x_train, False)
+        self.x_train = extract_features(x_train)
         self.y_train = y_train
 
     def classify_using_DTW_distance(self, audio_files) -> tp.List[int]:
@@ -31,7 +43,7 @@ class DTWModel:
         for wav in tqdm(audio_files):
             wav = torch.cat([wav, torch.zeros((1, MAX_LEN-wav.size(1)))], dim=1)
             best_dist, best_label = float('inf'), None
-            mfcc = extract_features(wav, permute=False)
+            mfcc = extract_features(wav)
             for i, x in enumerate(self.x_train):
                 # cur_dist = self.DTW_distance(mfcc[0], x[0])
                 cur_dist = fastdtw(mfcc, x)[0]
@@ -47,7 +59,7 @@ class DTWModel:
             wav = torch.cat([wav, torch.zeros((1, MAX_LEN-wav.size(1)))], dim=1)
             wavs.append(wav)
         wavs = torch.stack(wavs)
-        self.x_train = torch.cat([self.x_train, extract_features(wavs, permute=False)])
+        self.x_train = torch.cat([self.x_train, extract_features(wavs)])
         self.y_train = self.y_train + y
 
     @staticmethod
@@ -76,7 +88,7 @@ class DTWModel:
 
 class EuclideanModel:
     def __init__(self, x_train, y_train):
-        self.x_train = extract_features(x_train, False)
+        self.x_train = extract_features(x_train)
         self.y_train = y_train
 
     def classify_using_euclidean_distance(self, audio_files) -> tp.List[int]:
@@ -90,7 +102,7 @@ class EuclideanModel:
 
         for wav in tqdm(audio_files):
             wav = torch.cat([wav, torch.zeros((1, MAX_LEN-wav.size(1)))], dim=1)
-            mfcc = extract_features(wav, permute=False)
+            mfcc = extract_features(wav)
             best_dist, best_label = float('inf'), None
             for i, x in enumerate(self.x_train):
                 cur_dist = torch.norm(mfcc - x)
@@ -106,5 +118,5 @@ class EuclideanModel:
             wav = torch.cat([wav, torch.zeros((1, MAX_LEN-wav.size(1)))], dim=1)
             wavs.append(wav)
         wavs = torch.stack(wavs)
-        self.x_train = torch.cat([self.x_train, extract_features(wavs, permute=False)])
+        self.x_train = torch.cat([self.x_train, extract_features(wavs)])
         self.y_train = self.y_train + y

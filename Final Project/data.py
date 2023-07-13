@@ -46,14 +46,7 @@ class Data:
                 transcripts.append(transcript)
 
         loaded_audios = [torchaudio.load(audio)[0] for audio in audio_paths]
-        max_length = max(tensor.size(1) for tensor in loaded_audios)
-        # Pad tensors and create the big tensor
-        big_tensor = torch.zeros((len(loaded_audios), 1, max_length))
-        for i, tensor in enumerate(loaded_audios):
-            padded_tensor = torch.cat(
-                [tensor, torch.zeros((1, max_length-tensor.size(1)))], dim=1)
-            big_tensor[i] = padded_tensor
-        return audio_paths, big_tensor, transcripts
+        return audio_paths, loaded_audios, transcripts
 
     def get_data(self, split):
         if split == 'train':
