@@ -4,6 +4,7 @@ import random
 import matplotlib.pyplot as plt
 from jiwer import wer, cer
 from tqdm import tqdm
+from torchaudio.models.decoder import download_pretrained_files
 
 import ctc_model
 import language_model
@@ -11,6 +12,8 @@ from data import Data
 from distances import DTWModel, EuclideanModel
 from vocabulary import Vocabulary
 from constants import BATCH_SIZE, SR, CTC_MODEL_PATH
+
+files = download_pretrained_files("librispeech-4-gram")
 
 
 def evaluate(model, x_test, y_test):
@@ -118,9 +121,8 @@ def main():
     print('Training the language model...')
     # language_model.train_all_data(lang_model, y_train+y_val)
     print('Language model trained successfully')
-    # ctc_lstm = ctc_model.LSTMModel(vocabulary)
+    ctc_lstm = ctc_model.LSTMModel(vocabulary)
     # ctc_lstm = ctc_model.BidirectionalGRU(vocabulary)
-    ctc_lstm = ctc_model.DeepSpeech(vocabulary)
     if os.path.exists(CTC_MODEL_PATH):
         print('Loading the model...')
         ctc_model.load_model(ctc_lstm, CTC_MODEL_PATH)

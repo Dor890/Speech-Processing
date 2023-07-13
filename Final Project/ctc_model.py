@@ -170,13 +170,13 @@ def train_batch(model, optimizer, feats_batch, target_batch, input_lengths, sche
     # Backward pass and optimize
     loss.backward()
     optimizer.step()
-    scheduler.step()
+    # scheduler.step()
 
     return loss.item()
 
 
 def train_all_data(model, train_data, target_data):
-    optimizer = torch.optim.AdamW(model.parameters(), LEARNING_RATE)
+    optimizer = torch.optim.Adam(model.parameters(), LEARNING_RATE)
     scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=LEARNING_RATE,
                                             steps_per_epoch=int(len(train_data)//BATCH_SIZE-1),
                                             epochs=N_EPOCHS,
