@@ -252,22 +252,11 @@ def targets_to_tensor(vocabulary, targets):
         translated_arr.append(translated_numbers)
 
     max_length = max(lengths)
-    # Pad tensors and create the big tensor
     padded_targets = torch.zeros(len(translated_arr), max_length)
 
     for i in range(len(translated_arr)):
         for j in range(len(translated_arr[i])):
             padded_targets[i, j] = translated_arr[i][j]
-
-
-    # test reconstruction
-    # j = 0
-    # for tensor in final_tensor:
-    #     t = ""
-    #     for i in range(tensor.shape[0]):
-    #         t += vocabulary.invert_trans[tensor[i].item()]
-    #     assert t == targets[j]
-    #     j += 1
 
     return padded_targets, torch.tensor(lengths)
 
@@ -294,11 +283,29 @@ def train_batch(model, optimizer, feats, target, criterion, scheduler):
     return loss.item()
 
 
+def test(model, test_loader, criterion):
+    print('\nevaluating...')
+    model.eval()
+    test_loss = 0
+    with torch.no_grad():
+        for i, _data in enumerate(test_loader):
+            spectrograms, labels, input_lengths, label_lengths = _data
+            spectrograms, labels = spectrograms.to(device), labels.to(device)
 
-def train_all_data(model, train_loader):
+            output = model(spectrograms)  # (batch, time, n_class)
+            output = F.log_softmax(output, dim=2)
+            output = output.transpose(0, 1)  # (time, batch, n_class)
 
+            loss = criterion(output, labels, input_lengths, label_lengths)
+            test_loss += loss.item() / len(test_loader)
+            arg_maxes = torch.argmax(output.transpose(0, 1), dim=2)
+            # decoded_preds, decoded_targets = GreedyDecoder(output.transpose(0, 1), labels)
+            # print(decoded_preds, decoded_targets)
+
+
+def train_all_data(model, train_loader, criterion):
     data_len = len(train_loader.dataset)
-    criterion = nn.CTCLoss(blank=0).to(device)
+    nn.CTCLoss(blank=0).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), 0.003,
                                   weight_decay=0.01)
     scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=LEARNING_RATE,
@@ -319,7 +326,6 @@ def train_all_data(model, train_loader):
 
             loss = criterion(output, labels, input_lengths, label_lengths)
             loss.backward()
-
             optimizer.step()
             scheduler.step()
 
@@ -327,16 +333,5 @@ def train_all_data(model, train_loader):
                                                                            data_len,
                                                                            100. * batch_idx / len(train_loader),
                                                                            loss.item()))
-
-    # for epoch in range(N_EPOCHS):
-    #     total_loss = 0
-    #     for i, batch_start in tqdm(
-    #             enumerate(range(0, len(train_data), BATCH_SIZE))):
-    #         batch = train_data[batch_start:batch_start + BATCH_SIZE]
-    #         target_batch = target_data[batch_start:batch_start + BATCH_SIZE]
-    #         loss = train_batch(model, optimizer, batch, target_batch, nn.CTCLoss(blank=0).to(device), scheduler)
-    #         total_loss += loss
-    #
-    #     print(f"Epoch: {epoch + 1}, Loss: {total_loss:.4f}")
 
     save_model(model, CTC_MODEL_PATH)

@@ -3,6 +3,7 @@ import torch
 import random
 import matplotlib.pyplot as plt
 from jiwer import wer, cer
+from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -154,22 +155,25 @@ def main():
                                                 ).to(device)
 
     # ctc_lstm = ctc_model.LSTMModel(vocabulary)
+    lossFunc = nn.CTCLoss(blank=0).to(device)
     if os.path.exists(CTC_MODEL_PATH):
         print('Loading the models...')
         ctc_model.load_model(ctc_lstm, CTC_MODEL_PATH)
         print('Model loaded successfully')
     else:  # Train the models
         print('Training the models...')
-        ctc_model.train_all_data(ctc_lstm, train_loader)
+        ctc_model.train_all_data(ctc_lstm, train_loader, lossFunc)
     print('Model trained successfully')
 
+    ctc_model.test(ctc_lstm, test_loader, lossFunc)
+
     # Evaluate the models on the test set
-    print('Evaluating the models...')
-    x_test, y_test = data.get_data('train')
-    test_wer, test_cer = evaluate(ctc_lstm, x_test, y_test)
-    print(f'Test WER: {test_wer:.4f}')
-    print(f'Test CER: {test_cer:.4f}')
-    print('Model evaluated successfully')
+    # print('Evaluating the models...')
+    # x_test, y_test = data.get_data('train')
+    # test_wer, test_cer = evaluate(ctc_lstm, x_test, y_test)
+    # print(f'Test WER: {test_wer:.4f}')
+    # print(f'Test CER: {test_cer:.4f}')
+    # print('Model evaluated successfully')
     print('-- Finished running ---')
 
 
