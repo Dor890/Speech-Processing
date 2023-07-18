@@ -78,8 +78,8 @@ class GreedyDecoder(torch.nn.Module):
           List[str]: The resulting transcript.
         """
         # emission[:, :, :2] = -20
-        indices = torch.argmax(emission, dim=-1)  # [batch, num_seq]
-        indices = torch.unique_consecutive(indices, dim=-1)
-        indices = [i for i in indices if i != self.blank]
-        joined = "".join([self.labels[i] for i in indices])
-        return joined
+        indices = torch.argmax(emission, dim=2)  # [batch, num_seq]
+        res = []
+        for batch in indices:
+            res.append("".join([self.labels[i] for i in batch if i != self.blank]))
+        return res

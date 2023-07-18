@@ -18,6 +18,7 @@ from decoders import GreedyDecoder, BeamSearchDecoder
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 files = download_pretrained_files("librispeech-4-gram")
 
+
 class CNNLayerNorm(nn.Module):
     """Layer normalization built for cnns input"""
 
@@ -27,7 +28,10 @@ class CNNLayerNorm(nn.Module):
 
     def forward(self, x):
         # x (batch, channel, feature, time)
-        return self.layer_norm(x)
+        x = x.transpose(2, 3).contiguous()  # (batch, channel, time, feature)
+        x = self.layer_norm(x)
+        return x.transpose(2, 3).contiguous()  # (batch, channel, feature, time)
+
 
 class ResidualCNN(nn.Module):
     """Residual CNN inspired by https://arxiv.org/pdf/1603.05027.pdf
@@ -101,8 +105,7 @@ class SpeechRecognitionModel(nn.Module):
         self.fully_connected = nn.Linear(n_feats * 32, rnn_dim)
         self.birnn_layers = nn.Sequential(*[
             BidirectionalGRU(rnn_dim=rnn_dim if i == 0 else rnn_dim * 2,
-                             hidden_size=rnn_dim, dropout=dropout,
-                             batch_first=i == 0)
+                             hidden_size=rnn_dim, dropout=dropout, batch_first=i == 0)
             for i in range(n_rnn_layers)
         ])
         self.classifier = nn.Sequential(
@@ -117,13 +120,11 @@ class SpeechRecognitionModel(nn.Module):
         self.beam_decoder = ctc_decoder(lexicon='lexicon.txt',
                                         tokens='tokens.txt', lm=None)
 
-
     def forward(self, x):
-        x = self.cnn(x.unsqueeze(1))
+        x = self.cnn(x)
         x = self.rescnn_layers(x)
         sizes = x.size()
-        x = x.view(sizes[0], sizes[1] * sizes[3],
-                   sizes[2])  # (batch, feature, time)
+        x = x.view(sizes[0], sizes[1] * sizes[2], sizes[3])  # (batch, feature, time)
         x = x.transpose(1, 2)  # (batch, time, feature)
         x = self.fully_connected(x)
         x = self.birnn_layers(x)
@@ -133,21 +134,21 @@ class SpeechRecognitionModel(nn.Module):
 
 def save_model(model, path):
     """
-    Saves a pytorch model to the given path.
+    Saves a pytorch models to the given path.
     """
     torch.save(model.state_dict(), '{}'.format(path))
 
 
 def load_model(model, path):
     """
-    Loads a pytorch model from the given path. The model should already by
+    Loads a pytorch models from the given path. The models should already by
     created (e.g. by calling the constructor) and should be passed as an argument.
     """
     model.load_state_dict(torch.load('{}'.format(path)))
     model.eval()
 
 
-def extract_features(wavs):
+def extract_features(wavs, is_train=False):
     """
     Extract MFCC features from the given audios batch.
     More ideas: try Time Domain / STFT / Mel Spectrogram
@@ -165,36 +166,39 @@ def extract_features(wavs):
     # mel_batch = transform(wavs).squeeze()
     # mel_batch = mel_batch.permute(0, 2, 1)
     # return mel_batch
-
-    transform = nn.Sequential(
-        torchaudio.transforms.MelSpectrogram(sample_rate=SR, n_mels=N_MELS),
-        torchaudio.transforms.FrequencyMasking(freq_mask_param=15),
-        torchaudio.transforms.TimeMasking(time_mask_param=35)
-    )
-
+    if is_train:
+        transform = nn.Sequential(
+            torchaudio.transforms.MelSpectrogram(sample_rate=SR, n_mels=N_MELS),
+            torchaudio.transforms.FrequencyMasking(freq_mask_param=15),
+            torchaudio.transforms.TimeMasking(time_mask_param=35))
+    else:
+        transform = torchaudio.transforms.MelSpectrogram()
 
     for wav in wavs:
-        spectrograms.append(transform(wav))
-        input_lengths.append(spectrograms[-1].shape[2])
+        spec = transform(wav).squeeze(0).transpose(0, 1)
+        spectrograms.append(spec)
+        input_lengths.append(spec.shape[0] // 2)
 
-    max_length = max(tensor.size(2) for tensor in spectrograms)
-    # Pad tensors and create the big tensor
-    mel_batch = torch.zeros((len(spectrograms), N_MELS, max_length))
-    for i, tensor in enumerate(spectrograms):
-        mel_batch[i, :, :tensor.shape[2]] = tensor[0, :, :]
-        # debug
-        for j in range(tensor.shape[1]):
-            for k in range(tensor.shape[2]):
-                assert mel_batch[i][j][k] == tensor[0][j][k]
-                # print(mel_batch[i][j][k],tensor[0][j][k])
+    spectrograms = nn.utils.rnn.pad_sequence(spectrograms, batch_first=True).unsqueeze(1).transpose(2, 3)
 
-    mel_batch = mel_batch.permute(0, 2, 1) # (batch, mel, timeFrame)
-    return mel_batch, torch.Tensor(input_lengths).long()
+    # max_length = max(tensor.size(2) for tensor in spectrograms)
+    # # Pad tensors and create the big tensor
+    # mel_batch = torch.zeros((len(spectrograms), max_length, N_MELS))
+    # for i, tensor in enumerate(spectrograms):
+    #     mel_batch[i, :, :tensor.shape[2]] = tensor[0, :, :]
+    # debug
+    # for j in range(tensor.shape[1]):
+    #     for k in range(tensor.shape[2]):
+    #         assert mel_batch[i][j][k] == tensor[0][j][k]
+    #         # print(mel_batch[i][j][k],tensor[0][j][k])
+
+    # mel_batch = mel_batch.permute(0, 2, 1)  # (batch, mel, timeFrame)
+    return spectrograms, torch.Tensor(input_lengths).long()
 
 
 class LSTMModel(nn.Module):
     """
-    A basic LSTM model for speech recognition.
+    A basic LSTM models for speech recognition.
     """
 
     def __init__(self, vocabulary, lang_model=None):
@@ -215,20 +219,24 @@ class LSTMModel(nn.Module):
                                         tokens='tokens.txt', lm=files.lm)
 
     def forward(self, x):
+        sizes = x.size()
+        x = x.view(sizes[0], sizes[1] * sizes[2], sizes[3])  # (batch, feature, time)
+        x = x.transpose(1, 2)  # (batch, time, feature)
         rnn_output, _ = self.rnn(x)
         output = self.fc(rnn_output)
         # output = F.log_softmax(output, dim=2)
 
         return output
 
+
 def predict(model, feats):
     """
-    Predicts a batch of waveforms using the given model.
+    Predicts a batch of waveforms using the given models.
     """
     emission = model(feats)
-    # greedy_result = model.gredy_decoder(emission)
-    beam_search_result = model.beam_decoder(emission)
-    return beam_search_result
+    greedy_result = model.greedy_decoder(emission)
+    # beam_search_result = model.beam_decoder(emission)
+    return greedy_result
 
 
 def targets_to_tensor(vocabulary, targets):
@@ -236,57 +244,53 @@ def targets_to_tensor(vocabulary, targets):
     Converts a list of targets to a tensor.
     """
     max_length = max(len(target) for target in targets)
-    translated_tensors, lengths = [], []
+    translated_arr, lengths = [], []
 
     for target in targets:
         translated_numbers = [vocabulary.translator[char] for char in target]
         lengths.append(len(translated_numbers))
-        padded_numbers = F.pad(torch.tensor(translated_numbers),
-                               (0, max_length - len(translated_numbers)))
-        translated_tensors.append(padded_numbers)
-    final_tensor = torch.stack(translated_tensors)
-    lengths = torch.tensor(lengths)
+        translated_arr.append(translated_numbers)
+
+    max_length = max(lengths)
+    # Pad tensors and create the big tensor
+    padded_targets = torch.zeros(len(translated_arr), max_length)
+
+    for i in range(len(translated_arr)):
+        for j in range(len(translated_arr[i])):
+            padded_targets[i, j] = translated_arr[i][j]
+
 
     # test reconstruction
-    j = 0
-    for tensor in final_tensor:
-        t = ""
-        for i in range(tensor.shape[0]):
-            t += vocabulary.invert_trans[tensor[i].item()]
-        assert t == targets[j]
-        j += 1
+    # j = 0
+    # for tensor in final_tensor:
+    #     t = ""
+    #     for i in range(tensor.shape[0]):
+    #         t += vocabulary.invert_trans[tensor[i].item()]
+    #     assert t == targets[j]
+    #     j += 1
 
-    return final_tensor, lengths
+    return padded_targets, torch.tensor(lengths)
 
 
-def train_batch(model, optimizer, feats_batch, target_batch, input_lengths,
-                scheduler):
+def train_batch(model, optimizer, feats, target, criterion, scheduler):
     """
-    Trains a single batch of the model, using the given optimizer.
+    Trains a single batch of the models, using the given optimizer.
     """
-    feats_batch.to(device)
-    target_batch, targets_lengths = targets_to_tensor(model.vocabulary,
-                                                      target_batch)
-    target_batch.to(device)
 
-    optimizer.zero_grad()
+    feats_batch, input_lengths = extract_features(feats, is_train=True)
+    target_batch, targets_lengths = targets_to_tensor(model.vocabulary, target)
+    feats_batch, target_batch = feats_batch.to(device), target_batch.to(device)
 
-    # Forward pass
-    output = model(feats_batch).to(device)
-    output = F.log_softmax(output, dim=2).permute(1, 0, 2)
+    # feats are batch,time,mels
+    output = model(feats_batch)
+    output = F.log_softmax(output, dim=2)
+    output = output.transpose(0, 1)  # switch time and batch
 
-    # target_batch = torch.flatten(target_batch)
-    # target_batch = target_batch[target_batch != 0]
     # Calculate the loss after CTC and perform autograd
-    loss = F.ctc_loss(output, target_batch, input_lengths, targets_lengths,
-                      zero_infinity=True).to(device)
-
-    # Backward pass and optimize
+    loss = criterion(output, target_batch, input_lengths, targets_lengths)
     loss.backward()
-    # torch.nn.utils.clip_grad_norm(model.parameters(), 1.0)
     optimizer.step()
     scheduler.step()
-
     return loss.item()
 
 
@@ -294,24 +298,20 @@ def train_all_data(model, train_data, target_data):
     optimizer = torch.optim.AdamW(model.parameters(), 0.003,
                                   weight_decay=0.01)
     scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=LEARNING_RATE,
-                                              steps_per_epoch=16,
+                                              steps_per_epoch=int(len(train_data)),
                                               epochs=N_EPOCHS,
                                               anneal_strategy='linear')
-    model.to(device)
+    model = model.to(device)
     for epoch in range(N_EPOCHS):
         total_loss = 0
         model.train()
         for i, batch_start in tqdm(
                 enumerate(range(0, len(train_data), BATCH_SIZE))):
             batch = train_data[batch_start:batch_start + BATCH_SIZE]
-
-            feats_batch, input_lengths = extract_features(batch) # we premute (batch, mel, frame(numMel))
             target_batch = target_data[batch_start:batch_start + BATCH_SIZE]
-            loss = train_batch(model, optimizer, feats_batch, target_batch,
-                               input_lengths, scheduler)
+            loss = train_batch(model, optimizer, batch, target_batch, nn.CTCLoss(blank=0).to(device), scheduler)
             total_loss += loss
 
         print(f"Epoch: {epoch + 1}, Loss: {total_loss:.4f}")
 
     save_model(model, CTC_MODEL_PATH)
-

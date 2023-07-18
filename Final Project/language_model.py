@@ -13,7 +13,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class LanguageModel(nn.Module):
     """
-    A basic LSTM model for speech recognition.
+    A basic LSTM models for speech recognition.
     """
     def __init__(self, vocabulary):
         super(LanguageModel, self).__init__()
@@ -42,7 +42,7 @@ def tokenize(sentence, vocabulary):
 
 def prepare_batch(sentences, vocabulary):
     """
-    Prepare the batch for the model, by tokenizing each sentence and
+    Prepare the batch for the models, by tokenizing each sentence and
     converting to tensors.
     """
     tokenized_batch = [tokenize(sentence, vocabulary) for sentence in sentences]
@@ -71,7 +71,7 @@ def pad_sequence(sequence, max_length):
 
 def train_sequence(model, inputs, targets, lengths, criterion, optimizer):
     """
-    Train the model on a single sequence.
+    Train the models on a single sequence.
     """
     model.train()
     hidden = None

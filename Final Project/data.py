@@ -2,7 +2,10 @@ import os
 import torch
 import torchaudio
 import matplotlib.pyplot as plt
+from torch import nn
+from torch.utils.data import Dataset
 
+import vocabulary
 from constants import SR, FILE_2CHECK, N_MFCC, N_MELS
 from distances import extract_features
 
@@ -72,7 +75,7 @@ class Data:
             axes[c].plot(time_axis, waveform[c], linewidth=1)
             axes[c].grid(True)
             if num_channels > 1:
-                axes[c].set_ylabel(f'Channel {c+1}')
+                axes[c].set_ylabel(f'Channel {c + 1}')
             if xlim:
                 axes[c].set_xlim(xlim)
             if ylim:
@@ -109,3 +112,58 @@ class Data:
         if ylim:
             ax.set_ylim(ylim)
         plt.show(block=False)
+
+
+class AN4Dataset(Dataset):
+    def __init__(self, split, transform=None, target_transform=None):
+        self.transform = transform
+        self.target_transform = target_transform
+
+        audio_dir = os.path.join('an4', split, 'an4', 'wav')
+        transcript_dir = os.path.join('an4', split, 'an4', 'txt')
+
+        audio_files = sorted(os.listdir(audio_dir))
+        transcript_files = sorted(os.listdir(transcript_dir))
+
+        audio_paths = [os.path.join(audio_dir, file) for file in audio_files]
+        transcript_paths = [os.path.join(transcript_dir, file) for file in
+                            transcript_files]
+
+        self.audios, self.transcripts = [], []
+
+        for audio_path, transcript_path in zip(audio_paths, transcript_paths):
+            with open(transcript_path, 'r') as f:
+                transcript = f.read().strip()
+                self.transcripts.append(transcript)
+
+        self.loaded_audios = [torchaudio.load(audio)[0] for audio in audio_paths]
+
+    def __len__(self):
+        return len(self.loaded_audios)
+
+    def __getitem__(self, idx):
+        return self.loaded_audios[idx], self.transcripts[idx]
+
+
+def data_processing(data, data_type="train"):
+    inputs, inputs_lengths, labels, labels_length = [], [], [], []
+
+    if data_type == "train":
+        transform = nn.Sequential(
+            torchaudio.transforms.MelSpectrogram(sample_rate=SR, n_mels=N_MELS),
+            torchaudio.transforms.FrequencyMasking(freq_mask_param=15),
+            torchaudio.transforms.TimeMasking(time_mask_param=35))
+    else:
+        transform = torchaudio.transforms.MelSpectrogram()
+
+    for (wav, transcript) in data:
+        spec = transform(wav).squeeze(0).transpose(0, 1)
+        inputs.append(spec)
+        inputs_lengths.append(spec.shape[0] // 2)
+        translated_numbers = torch.tensor([vocabulary.translator[char] for char in transcript])
+        labels.append(translated_numbers)
+        labels_length.append(len(translated_numbers))
+
+    spectrograms = nn.utils.rnn.pad_sequence(inputs, batch_first=True).unsqueeze(1).transpose(2, 3)
+    labels = nn.utils.rnn.pad_sequence(labels, batch_first=True)
+    return spectrograms, labels, inputs_lengths, labels_length

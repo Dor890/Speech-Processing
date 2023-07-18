@@ -53,7 +53,7 @@ class Vocabulary:
 
     def create_unigram_lang_model(self):
         """
-        Given all transcriptions in the data, Create a unigram language model.
+        Given all transcriptions in the data, Create a unigram language models.
         """
         vocabulary = defaultdict(int)
 
