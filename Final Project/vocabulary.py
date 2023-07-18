@@ -7,7 +7,7 @@ TOKENS_PATH = 'tokens.txt'
 class Vocabulary:
     def __init__(self, transcriptions, type='unigram'):
         self.transcriptions = transcriptions
-        self.translator = self.create_trans_dict()
+        self.translator, self.invert_trans = self.create_trans_dict()
         self.size = len(self.translator)
         # self.generate_lexicon_file()
         # self.generate_tokens_file()
@@ -25,7 +25,8 @@ class Vocabulary:
         vocabulary.add('')
 
         vocabulary = sorted(list(vocabulary))
-        return {letter: i for i, letter in enumerate(vocabulary)}
+        return [{letter: i for i, letter in enumerate(vocabulary)}, \
+                {i: letter for i, letter in enumerate(vocabulary)}]
 
     def generate_lexicon(self):
         """

@@ -172,15 +172,23 @@ def extract_features(wavs):
         torchaudio.transforms.TimeMasking(time_mask_param=35)
     )
 
+
     for wav in wavs:
         spectrograms.append(transform(wav))
-        input_lengths.append(spectrograms[-1].shape[2] // 2)
+        input_lengths.append(spectrograms[-1].shape[2])
+
     max_length = max(tensor.size(2) for tensor in spectrograms)
     # Pad tensors and create the big tensor
     mel_batch = torch.zeros((len(spectrograms), N_MELS, max_length))
     for i, tensor in enumerate(spectrograms):
         mel_batch[i, :, :tensor.shape[2]] = tensor[0, :, :]
-    mel_batch = mel_batch.permute(0, 2, 1)
+        # debug
+        for j in range(tensor.shape[1]):
+            for k in range(tensor.shape[2]):
+                assert mel_batch[i][j][k] == tensor[0][j][k]
+                # print(mel_batch[i][j][k],tensor[0][j][k])
+
+    mel_batch = mel_batch.permute(0, 2, 1) # (batch, mel, timeFrame)
     return mel_batch, torch.Tensor(input_lengths).long()
 
 
@@ -209,7 +217,7 @@ class LSTMModel(nn.Module):
     def forward(self, x):
         rnn_output, _ = self.rnn(x)
         output = self.fc(rnn_output)
-        output = F.log_softmax(output, dim=2)
+        # output = F.log_softmax(output, dim=2)
 
         return output
 
@@ -238,6 +246,16 @@ def targets_to_tensor(vocabulary, targets):
         translated_tensors.append(padded_numbers)
     final_tensor = torch.stack(translated_tensors)
     lengths = torch.tensor(lengths)
+
+    # test reconstruction
+    j = 0
+    for tensor in final_tensor:
+        t = ""
+        for i in range(tensor.shape[0]):
+            t += vocabulary.invert_trans[tensor[i].item()]
+        assert t == targets[j]
+        j += 1
+
     return final_tensor, lengths
 
 
@@ -246,7 +264,7 @@ def train_batch(model, optimizer, feats_batch, target_batch, input_lengths,
     """
     Trains a single batch of the model, using the given optimizer.
     """
-    feats_batch.to(device).detach().requires_grad_()
+    feats_batch.to(device)
     target_batch, targets_lengths = targets_to_tensor(model.vocabulary,
                                                       target_batch)
     target_batch.to(device)
@@ -254,20 +272,20 @@ def train_batch(model, optimizer, feats_batch, target_batch, input_lengths,
     optimizer.zero_grad()
 
     # Forward pass
-    output = model(feats_batch).to(device).permute(1, 0, 2)
-    # output = F.log_softmax(output, dim=2)
+    output = model(feats_batch).to(device)
+    output = F.log_softmax(output, dim=2).permute(1, 0, 2)
 
-    target_batch = torch.flatten(target_batch)
-    target_batch = target_batch[target_batch != 0]
+    # target_batch = torch.flatten(target_batch)
+    # target_batch = target_batch[target_batch != 0]
     # Calculate the loss after CTC and perform autograd
     loss = F.ctc_loss(output, target_batch, input_lengths, targets_lengths,
                       zero_infinity=True).to(device)
 
     # Backward pass and optimize
     loss.backward()
-    torch.nn.utils.clip_grad_norm(model.parameters(), 1.0)
+    # torch.nn.utils.clip_grad_norm(model.parameters(), 1.0)
     optimizer.step()
-    # scheduler.step()
+    scheduler.step()
 
     return loss.item()
 
@@ -276,19 +294,18 @@ def train_all_data(model, train_data, target_data):
     optimizer = torch.optim.AdamW(model.parameters(), 0.003,
                                   weight_decay=0.01)
     scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=LEARNING_RATE,
-                                              steps_per_epoch=int(
-                                                  len(train_data) // BATCH_SIZE - 1),
+                                              steps_per_epoch=16,
                                               epochs=N_EPOCHS,
                                               anneal_strategy='linear')
-    model.train()
     model.to(device)
-    torch.autograd.set_detect_anomaly(True)
     for epoch in range(N_EPOCHS):
         total_loss = 0
+        model.train()
         for i, batch_start in tqdm(
                 enumerate(range(0, len(train_data), BATCH_SIZE))):
             batch = train_data[batch_start:batch_start + BATCH_SIZE]
-            feats_batch, input_lengths = extract_features(batch)
+
+            feats_batch, input_lengths = extract_features(batch) # we premute (batch, mel, frame(numMel))
             target_batch = target_data[batch_start:batch_start + BATCH_SIZE]
             loss = train_batch(model, optimizer, feats_batch, target_batch,
                                input_lengths, scheduler)
@@ -297,3 +314,4 @@ def train_all_data(model, train_data, target_data):
         print(f"Epoch: {epoch + 1}, Loss: {total_loss:.4f}")
 
     save_model(model, CTC_MODEL_PATH)
+
