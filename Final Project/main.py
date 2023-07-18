@@ -15,7 +15,6 @@ from constants import BATCH_SIZE, SR, CTC_MODEL_PATH, LEARNING_RATE, N_EPOCHS
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
 hparams = {
     "n_cnn_layers": 3,
     "n_rnn_layers": 5,
@@ -37,7 +36,7 @@ def evaluate(model, x_test, y_test):
     predictions, targets = [], []
 
     for i, batch_start in tqdm(enumerate(range(0, len(x_test), BATCH_SIZE))):
-        batch = x_test[batch_start:batch_start+BATCH_SIZE]
+        batch = x_test[batch_start:batch_start + BATCH_SIZE]
         # feats = torch.zeros((len(batch), 1, MAX_LEN))
         # for i, tensor in enumerate(batch):
         #     padded_tensor = torch.cat(
@@ -48,10 +47,10 @@ def evaluate(model, x_test, y_test):
         for j in range(len(batch_preds)):
             pred_tokens = model.beam_decoder.idxs_to_tokens(batch_preds[j][0].tokens)
             if j % 50 == 0:
-                print(f'True transcription: {y_test[batch_start+j]}')
+                print(f'True transcription: {y_test[batch_start + j]}')
                 print(f'Predicted transcription: {pred_tokens}')
             predictions.append(pred_tokens)
-            targets.append(y_test[batch_start+j])
+            targets.append(y_test[batch_start + j])
             # plot_alignments(batch[j],
             #                 models(models.extract_features(batch[j])),
             #                 pred_tokens, batch_preds[j].timesteps)
@@ -135,24 +134,24 @@ def main():
     train_data_set = AN4Dataset('train')
     test_data_set = AN4Dataset('test')
     train_loader = DataLoader(dataset=train_data_set,
-                                batch_size=hparams['batch_size'],
-                                shuffle=True,
-                                collate_fn=lambda x: data_processing(x, 'train'))
+                              batch_size=BATCH_SIZE,
+                              shuffle=True,
+                              collate_fn=lambda x: data_processing(x, vocabulary, 'train'))
     test_loader = DataLoader(dataset=test_data_set,
-                                batch_size=hparams['batch_size'],
-                                shuffle=False,
-                                collate_fn=lambda x: data_processing(x, 'val'))
+                             batch_size=BATCH_SIZE,
+                             shuffle=False,
+                             collate_fn=lambda x: data_processing(x, vocabulary, 'val'))
 
-    vocabulary = Vocabulary(transcriptions=(y_train+y_val))
+    vocabulary = Vocabulary(transcriptions=(y_train + y_val))
     # lang_model = language_model.LanguageModel(vocabulary)
     print('Training the language models...')
     # language_model.train_all_data(lang_model, y_train+y_val)
     print('Language models trained successfully')
     ctc_lstm = ctc_model.SpeechRecognitionModel(vocabulary,
-        hparams['n_cnn_layers'], hparams['n_rnn_layers'], hparams['rnn_dim'],
-        hparams['n_class'], hparams['n_feats'], hparams['stride'], hparams['dropout']
-        ).to(device)
-
+                                                hparams['n_cnn_layers'], hparams['n_rnn_layers'], hparams['rnn_dim'],
+                                                hparams['n_class'], hparams['n_feats'], hparams['stride'],
+                                                hparams['dropout']
+                                                ).to(device)
 
     # ctc_lstm = ctc_model.LSTMModel(vocabulary)
     if os.path.exists(CTC_MODEL_PATH):
@@ -161,7 +160,7 @@ def main():
         print('Model loaded successfully')
     else:  # Train the models
         print('Training the models...')
-        ctc_model.train_all_data(ctc_lstm, x_train, y_train)
+        ctc_model.train_all_data(ctc_lstm, train_loader)
     print('Model trained successfully')
 
     # Evaluate the models on the test set

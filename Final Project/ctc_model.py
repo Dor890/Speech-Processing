@@ -117,8 +117,8 @@ class SpeechRecognitionModel(nn.Module):
 
         # Decoders
         self.greedy_decoder = GreedyDecoder(vocabulary.translator.values())
-        self.beam_decoder = ctc_decoder(lexicon='lexicon.txt',
-                                        tokens='tokens.txt', lm=None)
+        # self.beam_decoder = ctc_decoder(lexicon='lexicon.txt',
+        #                                 tokens='tokens.txt', lm=None)
 
     def forward(self, x):
         x = self.cnn(x)
@@ -294,24 +294,49 @@ def train_batch(model, optimizer, feats, target, criterion, scheduler):
     return loss.item()
 
 
-def train_all_data(model, train_data, target_data):
+
+def train_all_data(model, train_loader):
+
+    data_len = len(train_loader.dataset)
+    criterion = nn.CTCLoss(blank=0).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), 0.003,
                                   weight_decay=0.01)
     scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=LEARNING_RATE,
-                                              steps_per_epoch=int(len(train_data)),
+                                              steps_per_epoch=data_len,
                                               epochs=N_EPOCHS,
                                               anneal_strategy='linear')
+    model.train()
     model = model.to(device)
     for epoch in range(N_EPOCHS):
-        total_loss = 0
-        model.train()
-        for i, batch_start in tqdm(
-                enumerate(range(0, len(train_data), BATCH_SIZE))):
-            batch = train_data[batch_start:batch_start + BATCH_SIZE]
-            target_batch = target_data[batch_start:batch_start + BATCH_SIZE]
-            loss = train_batch(model, optimizer, batch, target_batch, nn.CTCLoss(blank=0).to(device), scheduler)
-            total_loss += loss
+        for batch_idx, _data in enumerate(train_loader):
+            spectrograms, labels, input_lengths, label_lengths = _data
+            spectrograms, labels = spectrograms.to(device), labels.to(device)
 
-        print(f"Epoch: {epoch + 1}, Loss: {total_loss:.4f}")
+            optimizer.zero_grad()
+            output = model(spectrograms)  # (batch, time, n_class)
+            output = F.log_softmax(output, dim=2)
+            output = output.transpose(0, 1)  # (time, batch, n_class)
+
+            loss = criterion(output, labels, input_lengths, label_lengths)
+            loss.backward()
+
+            optimizer.step()
+            scheduler.step()
+
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(epoch, batch_idx * len(spectrograms),
+                                                                           data_len,
+                                                                           100. * batch_idx / len(train_loader),
+                                                                           loss.item()))
+
+    # for epoch in range(N_EPOCHS):
+    #     total_loss = 0
+    #     for i, batch_start in tqdm(
+    #             enumerate(range(0, len(train_data), BATCH_SIZE))):
+    #         batch = train_data[batch_start:batch_start + BATCH_SIZE]
+    #         target_batch = target_data[batch_start:batch_start + BATCH_SIZE]
+    #         loss = train_batch(model, optimizer, batch, target_batch, nn.CTCLoss(blank=0).to(device), scheduler)
+    #         total_loss += loss
+    #
+    #     print(f"Epoch: {epoch + 1}, Loss: {total_loss:.4f}")
 
     save_model(model, CTC_MODEL_PATH)

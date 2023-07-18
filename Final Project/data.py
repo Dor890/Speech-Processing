@@ -145,7 +145,7 @@ class AN4Dataset(Dataset):
         return self.loaded_audios[idx], self.transcripts[idx]
 
 
-def data_processing(data, data_type="train"):
+def data_processing(data, vocabulary, data_type="train"):
     inputs, inputs_lengths, labels, labels_length = [], [], [], []
 
     if data_type == "train":

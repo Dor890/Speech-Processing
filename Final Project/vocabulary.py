@@ -65,3 +65,5 @@ class Vocabulary:
         total_repetitions = sum(vocabulary.values())
         return {letter: count / total_repetitions
                 for letter, count in self.vocabulary.items()}
+
+
