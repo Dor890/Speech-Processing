@@ -6,6 +6,7 @@ from torch import nn
 from torch.utils.data import Dataset
 
 import vocabulary
+from TextTransform import TextTransform
 from constants import SR, FILE_2CHECK, N_MFCC, N_MELS
 from distances import extract_features
 
@@ -156,13 +157,14 @@ def data_processing(data, vocabulary, data_type="train"):
     else:
         transform = torchaudio.transforms.MelSpectrogram()
 
+    text_transform = TextTransform()
     for (wav, transcript) in data:
         spec = transform(wav).squeeze(0).transpose(0, 1)
         inputs.append(spec)
         inputs_lengths.append(spec.shape[0] // 2)
-        translated_numbers = torch.tensor([vocabulary.translator[char] for char in transcript])
-        labels.append(translated_numbers)
-        labels_length.append(len(translated_numbers))
+        label = torch.Tensor(text_transform.text_to_int(transcript))
+        labels.append(label)
+        labels_length.append(len(label))
 
     spectrograms = nn.utils.rnn.pad_sequence(inputs, batch_first=True).unsqueeze(1).transpose(2, 3)
     labels = nn.utils.rnn.pad_sequence(labels, batch_first=True)

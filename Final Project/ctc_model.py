@@ -9,6 +9,7 @@ from torchaudio.models.decoder._ctc_decoder import download_pretrained_files
 
 from tqdm import tqdm
 
+from TextTransform import gd
 from constants import SR, HOP_LEN, N_FFT, N_MELS, N_MFCC, HIDDEN_DIM, \
     NUM_LAYERS, \
     NUM_CLASSES, N_EPOCHS, BATCH_SIZE, WEIGHT_DECAY, LEARNING_RATE, \
@@ -298,14 +299,13 @@ def test(model, test_loader, criterion):
 
             loss = criterion(output, labels, input_lengths, label_lengths)
             test_loss += loss.item() / len(test_loader)
-            arg_maxes = torch.argmax(output.transpose(0, 1), dim=2)
-            # decoded_preds, decoded_targets = GreedyDecoder(output.transpose(0, 1), labels)
-            # print(decoded_preds, decoded_targets)
+            # arg_maxes = torch.argmax(output.transpose(0, 1), dim=2)
+            decoded_preds, decoded_targets = gd(output.transpose(0, 1), labels, label_lengths)
+            print(decoded_preds, decoded_targets)
 
 
 def train_all_data(model, train_loader, criterion):
     data_len = len(train_loader.dataset)
-    nn.CTCLoss(blank=0).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), 0.003,
                                   weight_decay=0.01)
     scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=LEARNING_RATE,
