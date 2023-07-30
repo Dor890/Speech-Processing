@@ -126,6 +126,13 @@ class AN4Dataset(Dataset):
         audio_files = sorted(os.listdir(audio_dir))
         transcript_files = sorted(os.listdir(transcript_dir))
 
+        assert len(audio_dir) == len(transcript_dir)
+        for i in range(len(audio_files)):
+            a_name = audio_files[i].split(".")[0]
+            t_name = transcript_files[i].split(".")[0]
+
+            assert a_name == t_name
+
         audio_paths = [os.path.join(audio_dir, file) for file in audio_files]
         transcript_paths = [os.path.join(transcript_dir, file) for file in
                             transcript_files]
@@ -138,6 +145,7 @@ class AN4Dataset(Dataset):
                 self.transcripts.append(transcript)
 
         self.loaded_audios = [torchaudio.load(audio)[0] for audio in audio_paths]
+
 
     def __len__(self):
         return len(self.loaded_audios)
@@ -152,8 +160,8 @@ def data_processing(data, vocabulary, data_type="train"):
     if data_type == "train":
         transform = nn.Sequential(
             torchaudio.transforms.MelSpectrogram(sample_rate=SR, n_mels=N_MELS),
-            torchaudio.transforms.FrequencyMasking(freq_mask_param=15),
-            torchaudio.transforms.TimeMasking(time_mask_param=35))
+            torchaudio.transforms.FrequencyMasking(freq_mask_param=30),
+            torchaudio.transforms.TimeMasking(time_mask_param=100))
     else:
         transform = torchaudio.transforms.MelSpectrogram()
 
@@ -162,10 +170,20 @@ def data_processing(data, vocabulary, data_type="train"):
         spec = transform(wav).squeeze(0).transpose(0, 1)
         inputs.append(spec)
         inputs_lengths.append(spec.shape[0] // 2)
-        label = torch.Tensor(text_transform.text_to_int(transcript))
+        label = torch.Tensor(text_transform.text_to_int(str(transcript).lower()))
         labels.append(label)
         labels_length.append(len(label))
 
+    if max(inputs_lengths) > inputs_lengths[0]:
+        x = 1
+
+    max_length = max(inputs_lengths)
+    # Pad tensors and create the big tensor
+    # spectrograms = torch.zeros((len(inputs), max_length, N_MELS))
+    # for i, tensor in enumerate(inputs):
+    #     spectrograms[i, :tensor.shape[0], :] = tensor[:, :]
+
+    # spectrograms = spectrograms.unsqueeze(1).transpose(2, 3)
     spectrograms = nn.utils.rnn.pad_sequence(inputs, batch_first=True).unsqueeze(1).transpose(2, 3)
     labels = nn.utils.rnn.pad_sequence(labels, batch_first=True)
     return spectrograms, labels, inputs_lengths, labels_length

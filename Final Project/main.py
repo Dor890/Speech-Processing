@@ -20,7 +20,7 @@ hparams = {
     "n_cnn_layers": 3,
     "n_rnn_layers": 5,
     "rnn_dim": 512,
-    "n_class": 28,
+    "n_class": 29,
     "n_feats": 128,
     "stride": 2,
     "dropout": 0.1,
@@ -148,14 +148,14 @@ def main():
     print('Training the language models...')
     # language_model.train_all_data(lang_model, y_train+y_val)
     print('Language models trained successfully')
-    ctc_lstm = ctc_model.SpeechRecognitionModel(vocabulary,
-                                                hparams['n_cnn_layers'], hparams['n_rnn_layers'], hparams['rnn_dim'],
-                                                hparams['n_class'], hparams['n_feats'], hparams['stride'],
-                                                hparams['dropout']
-                                                ).to(device)
-
-    # ctc_lstm = ctc_model.LSTMModel(vocabulary)
-    lossFunc = nn.CTCLoss(blank=0).to(device)
+    # ctc_lstm = ctc_model.SpeechRecognitionModel(vocabulary,
+    #                                             hparams['n_cnn_layers'], hparams['n_rnn_layers'], hparams['rnn_dim'],
+    #                                             hparams['n_class'], hparams['n_feats'], hparams['stride'],
+    #                                             hparams['dropout']
+    #                                             ).to(device)
+    #
+    ctc_lstm = ctc_model.LSTMModel(vocabulary)
+    lossFunc = nn.CTCLoss(blank=28, zero_infinity=True).to(device)
     if os.path.exists(CTC_MODEL_PATH):
         print('Loading the models...')
         ctc_model.load_model(ctc_lstm, CTC_MODEL_PATH)

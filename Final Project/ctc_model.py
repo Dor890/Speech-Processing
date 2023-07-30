@@ -182,17 +182,6 @@ def extract_features(wavs, is_train=False):
 
     spectrograms = nn.utils.rnn.pad_sequence(spectrograms, batch_first=True).unsqueeze(1).transpose(2, 3)
 
-    # max_length = max(tensor.size(2) for tensor in spectrograms)
-    # # Pad tensors and create the big tensor
-    # mel_batch = torch.zeros((len(spectrograms), max_length, N_MELS))
-    # for i, tensor in enumerate(spectrograms):
-    #     mel_batch[i, :, :tensor.shape[2]] = tensor[0, :, :]
-    # debug
-    # for j in range(tensor.shape[1]):
-    #     for k in range(tensor.shape[2]):
-    #         assert mel_batch[i][j][k] == tensor[0][j][k]
-    #         # print(mel_batch[i][j][k],tensor[0][j][k])
-
     # mel_batch = mel_batch.permute(0, 2, 1)  # (batch, mel, timeFrame)
     return spectrograms, torch.Tensor(input_lengths).long()
 
@@ -208,18 +197,21 @@ class LSTMModel(nn.Module):
         self.lang_model = lang_model
 
         # RNN layers
-        self.rnn = nn.LSTM(input_size=N_MELS, hidden_size=HIDDEN_DIM,
+        self.rnn = nn.LSTM(input_size=4032, hidden_size=HIDDEN_DIM,
                            num_layers=NUM_LAYERS, batch_first=True)
+
+        self.conv = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3)
 
         # Fully connected layer
         self.fc = nn.Linear(HIDDEN_DIM, NUM_CLASSES)
 
         # Decoders
         self.greedy_decoder = GreedyDecoder(vocabulary.translator.values())
-        self.beam_decoder = ctc_decoder(lexicon='lexicon.txt',
-                                        tokens='tokens.txt', lm=files.lm)
+        # self.beam_decoder = ctc_decoder(lexicon='lexicon.txt',
+        #                                 tokens='tokens.txt', lm=files.lm)
 
     def forward(self, x):
+        x = self.conv(x)
         sizes = x.size()
         x = x.view(sizes[0], sizes[1] * sizes[2], sizes[3])  # (batch, feature, time)
         x = x.transpose(1, 2)  # (batch, time, feature)
@@ -238,50 +230,6 @@ def predict(model, feats):
     greedy_result = model.greedy_decoder(emission)
     # beam_search_result = model.beam_decoder(emission)
     return greedy_result
-
-
-def targets_to_tensor(vocabulary, targets):
-    """
-    Converts a list of targets to a tensor.
-    """
-    max_length = max(len(target) for target in targets)
-    translated_arr, lengths = [], []
-
-    for target in targets:
-        translated_numbers = [vocabulary.translator[char] for char in target]
-        lengths.append(len(translated_numbers))
-        translated_arr.append(translated_numbers)
-
-    max_length = max(lengths)
-    padded_targets = torch.zeros(len(translated_arr), max_length)
-
-    for i in range(len(translated_arr)):
-        for j in range(len(translated_arr[i])):
-            padded_targets[i, j] = translated_arr[i][j]
-
-    return padded_targets, torch.tensor(lengths)
-
-
-def train_batch(model, optimizer, feats, target, criterion, scheduler):
-    """
-    Trains a single batch of the models, using the given optimizer.
-    """
-
-    feats_batch, input_lengths = extract_features(feats, is_train=True)
-    target_batch, targets_lengths = targets_to_tensor(model.vocabulary, target)
-    feats_batch, target_batch = feats_batch.to(device), target_batch.to(device)
-
-    # feats are batch,time,mels
-    output = model(feats_batch)
-    output = F.log_softmax(output, dim=2)
-    output = output.transpose(0, 1)  # switch time and batch
-
-    # Calculate the loss after CTC and perform autograd
-    loss = criterion(output, target_batch, input_lengths, targets_lengths)
-    loss.backward()
-    optimizer.step()
-    scheduler.step()
-    return loss.item()
 
 
 def test(model, test_loader, criterion):
@@ -306,8 +254,7 @@ def test(model, test_loader, criterion):
 
 def train_all_data(model, train_loader, criterion):
     data_len = len(train_loader.dataset)
-    optimizer = torch.optim.AdamW(model.parameters(), 0.003,
-                                  weight_decay=0.01)
+    optimizer = torch.optim.RMSprop(model.parameters(), LEARNING_RATE)
     scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=LEARNING_RATE,
                                               steps_per_epoch=data_len,
                                               epochs=N_EPOCHS,
@@ -315,6 +262,9 @@ def train_all_data(model, train_loader, criterion):
     model.train()
     model = model.to(device)
     for epoch in range(N_EPOCHS):
+        if (epoch + 1) % 11 == 0:
+            save_model(model, CTC_MODEL_PATH)
+
         for batch_idx, _data in enumerate(train_loader):
             spectrograms, labels, input_lengths, label_lengths = _data
             spectrograms, labels = spectrograms.to(device), labels.to(device)
