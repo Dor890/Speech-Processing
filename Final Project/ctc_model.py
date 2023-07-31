@@ -1,7 +1,9 @@
+import numpy as np
 import torch
 import torchaudio
 
 import torch.nn as nn
+from jiwer import wer, cer
 from torch import optim
 import torch.nn.functional as F
 from torchaudio.models.decoder import ctc_decoder
@@ -145,8 +147,8 @@ def load_model(model, path):
     Loads a pytorch models from the given path. The models should already by
     created (e.g. by calling the constructor) and should be passed as an argument.
     """
-    model.load_state_dict(torch.load('{}'.format(path)))
-    model.eval()
+    model.load_state_dict(torch.load('{}'.format(path), map_location=torch.device('cpu')))
+    # model.eval()
 
 
 def extract_features(wavs, is_train=False):
@@ -237,6 +239,7 @@ def test(model, test_loader, criterion):
     model.eval()
     test_loss = 0
     with torch.no_grad():
+        wers, cers = [], []
         for i, _data in enumerate(test_loader):
             spectrograms, labels, input_lengths, label_lengths = _data
             spectrograms, labels = spectrograms.to(device), labels.to(device)
@@ -249,7 +252,16 @@ def test(model, test_loader, criterion):
             test_loss += loss.item() / len(test_loader)
             # arg_maxes = torch.argmax(output.transpose(0, 1), dim=2)
             decoded_preds, decoded_targets = gd(output.transpose(0, 1), labels, label_lengths)
-            print(decoded_preds, decoded_targets)
+            # for j in range(len(decoded_targets)):
+            #     print(f"pred:{decoded_preds[j]}, actual:{decoded_targets[j]}")
+
+            wer_error = wer(decoded_targets, decoded_preds)
+            wers.append(wer_error)
+            cer_error = cer(decoded_targets, decoded_preds)
+            cers.append(cer_error)
+            print(f'Iteration {i}: Test WER: {wer_error:.4f}, Test CER: {cer_error:.4f}')
+
+        print(f"avg wer:{np.mean(wers)}, avg cer: {np.mean(cers)}")
 
 
 def train_all_data(model, train_loader, criterion):

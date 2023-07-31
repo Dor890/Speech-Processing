@@ -148,27 +148,31 @@ def main():
     print('Training the language models...')
     # language_model.train_all_data(lang_model, y_train+y_val)
     print('Language models trained successfully')
-    # ctc_lstm = ctc_model.SpeechRecognitionModel(vocabulary,
-    #                                             hparams['n_cnn_layers'], hparams['n_rnn_layers'], hparams['rnn_dim'],
-    #                                             hparams['n_class'], hparams['n_feats'], hparams['stride'],
-    #                                             hparams['dropout']
-    #                                             ).to(device)
+    ctc_lstm = ctc_model.SpeechRecognitionModel(vocabulary,
+                                                hparams['n_cnn_layers'], hparams['n_rnn_layers'], hparams['rnn_dim'],
+                                                hparams['n_class'], hparams['n_feats'], hparams['stride'],
+                                                hparams['dropout']
+                                                ).to(device)
     #
-    ctc_lstm = ctc_model.LSTMModel(vocabulary)
+    # ctc_lstm = ctc_model.LSTMModel(vocabulary)
     lossFunc = nn.CTCLoss(blank=28, zero_infinity=True).to(device)
-    if os.path.exists(CTC_MODEL_PATH):
-        print('Loading the models...')
-        ctc_model.load_model(ctc_lstm, CTC_MODEL_PATH)
-        print('Model loaded successfully')
-    else:  # Train the models
-        print('Training the models...')
-        ctc_model.train_all_data(ctc_lstm, train_loader, lossFunc)
+    ctc_model.load_model(ctc_lstm, CTC_MODEL_PATH)
+    # ctc_model.train_all_data(ctc_lstm, train_loader, lossFunc)
+
+    # if os.path.exists(CTC_MODEL_PATH):
+    #     print('Loading the models...')
+    #     ctc_model.load_model(ctc_lstm, CTC_MODEL_PATH)
+    #     print('Model loaded successfully')
+    # else:  # Train the models
+    #     print('Training the models...')
+    #     ctc_model.train_all_data(ctc_lstm, train_loader, lossFunc)
     print('Model trained successfully')
 
     ctc_model.test(ctc_lstm, test_loader, lossFunc)
 
     # Evaluate the models on the test set
     # print('Evaluating the models...')
+    # data = Data()
     # x_test, y_test = data.get_data('train')
     # test_wer, test_cer = evaluate(ctc_lstm, x_test, y_test)
     # print(f'Test WER: {test_wer:.4f}')
