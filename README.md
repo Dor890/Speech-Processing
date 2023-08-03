@@ -41,7 +41,7 @@ We used here AN4 dataset. This is a small dataset recorded and distributed by Ca
 The structure of the model is as follows:
 ![image](https://github.com/Dor890/Speech-Processing/assets/64433958/788a3f41-b831-4d53-9ea0-928642dc47f0)
 
-Throughout the project we introduce some different ways to manage an ASR model. In our case, we eventually builded our final model using ctc loss connected to a NN based on DeepSpeech2 structure. Moreover, we used beam decoder for creating new predictions, with a reasonable weight for the use of a 4-gram KenLM language model. For the final predictions over the test set we got the following results: 
+Throughout the project we introduce some different ways to manage an ASR model. In our case, we eventually builded our final model using ctc loss connected to a NN based on DeepSpeech2 structure. Moreover, we used beam decoder for creating new predictions, with a reasonable weight for the use of a 4-gram KenLM language model. For the final predictions over the test set we got the following results (Left one for WER, right one for CER): 
 ![image](https://github.com/Dor890/Speech-Processing/assets/64433958/2da4a185-aa7a-4531-a7e3-6c448075f151)
 
 Those can be seen in the allignments we made over different samples from the dataset:
