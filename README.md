@@ -41,6 +41,15 @@ We used here AN4 dataset. This is a small dataset recorded and distributed by Ca
 The structure of the model is as follows:
 ![image](https://github.com/Dor890/Speech-Processing/assets/64433958/788a3f41-b831-4d53-9ea0-928642dc47f0)
 
+Throughout the project we introduce some different ways to manage an ASR model. In our case, we eventually builded our final model using ctc loss connected to a NN based on DeepSpeech2 structure. Moreover, we used beam decoder for creating new predictions, with a reasonable weight for the use of a 4-gram KenLM language model. For the final predictions over the test set we got the following results: 
+![image](https://github.com/Dor890/Speech-Processing/assets/64433958/2da4a185-aa7a-4531-a7e3-6c448075f151)
+
+Those can be seen in the allignments we made over different samples from the dataset:
+
+![image](https://github.com/Dor890/Speech-Processing/assets/64433958/8a3c2669-0470-4e88-a232-ae777de670a5)
+
+For more information, you are more then welcome to read the final report which is located in the "Final Project" directory, which is written in Hebrew.
+
 
 ## Conclusion
 We hope this repository provides you with a valuable learning experience in speech processing and recognition. The exercises are designed to cover key concepts and techniques, allowing you to gain hands-on experience with various aspects of speech-related tasks. Feel free to explore the exercises, experiment with the code, and expand your knowledge in this exciting field!
